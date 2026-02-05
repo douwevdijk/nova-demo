@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
-import type { WordCloudDeepDive } from "@/lib/realtime-client";
+import type { OpenVraagDeepDive } from "@/lib/realtime-client";
 
-interface WordCloudDeepDiveDisplayProps {
-  data: WordCloudDeepDive | null;
+interface OpenVraagDeepDiveDisplayProps {
+  data: OpenVraagDeepDive | null;
   question: string;
   onClose: () => void;
 }
@@ -24,7 +24,7 @@ const PROFILE_ICONS: Record<string, string> = {
   "Marketing & Sales": "MS",
 };
 
-export function WordCloudDeepDiveDisplay({ data, question, onClose }: WordCloudDeepDiveDisplayProps) {
+export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagDeepDiveDisplayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [visibleSections, setVisibleSections] = useState(0);
 

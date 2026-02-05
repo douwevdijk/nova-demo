@@ -184,7 +184,7 @@ export class QuestionManager {
     };
   }
 
-  // Get active question with full results (for executeGetPollResults / executeGetWordCloudResults)
+  // Get active question with full results (for executeGetPollResults / executeGetOpenVraagResults)
   getActiveQuestionWithResults(): {
     question: PreparedQuestion;
     votes?: { option: string; count: number }[];

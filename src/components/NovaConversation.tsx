@@ -6,8 +6,8 @@ import { NovaVisualizer } from "./NovaVisualizer";
 import { PollDisplay } from "./PollDisplay";
 import { PollDeepDiveDisplay } from "./PollDeepDiveDisplay";
 import { WebSearchOverlay } from "./WebSearchOverlay";
-import { WordCloudDisplay } from "./WordCloudDisplay";
-import { WordCloudDeepDiveDisplay } from "./WordCloudDeepDiveDisplay";
+import { OpenVraagDisplay } from "./OpenVraagDisplay";
+import { OpenVraagDeepDiveDisplay } from "./OpenVraagDeepDiveDisplay";
 import { NovaSummaryDisplay } from "./NovaSummaryDisplay";
 import { NovaImageDisplay } from "./NovaImageDisplay";
 import { SeatAllocationDisplay } from "./SeatAllocationDisplay";
@@ -17,8 +17,8 @@ import {
   type PollData,
   type PollDeepDive,
   type WebSearchData,
-  type WordCloudData,
-  type WordCloudDeepDive,
+  type OpenVraagData,
+  type OpenVraagDeepDive,
   type NovaSummaryData,
   type NovaImageData,
   type SeatAllocationData,
@@ -26,7 +26,7 @@ import {
 import { generateCampaignId, createCampaign, saveQuestions, setQuestionActive, subscribeToQuestions, subscribeToActiveQuestionResults, deactivateQuestion, type PreparedQuestion } from "@/lib/firebase";
 import { QuestionManager, type QuestionDisplayData, type PollResultItem as QMPollResultItem, type OpenAnswer } from "@/lib/question-manager";
 
-type ActiveModal = "none" | "poll" | "polldeep-regions" | "polldeep-profiles" | "websearch" | "wordcloud" | "wcdeep" | "summary" | "image" | "seats";
+type ActiveModal = "none" | "poll" | "polldeep-regions" | "polldeep-profiles" | "websearch" | "openvraag" | "openvraagdeep" | "summary" | "image" | "seats";
 
 // Epic Nova Title Component with GSAP animations
 function NovaTitle() {
@@ -313,10 +313,10 @@ export function NovaConversation() {
   const [thinkingMessage, setThinkingMessage] = useState("");
   const [showVisualizer, setShowVisualizer] = useState(false);
   const [webSearch, setWebSearch] = useState<WebSearchData | null>(null);
-  const [wordCloud, setWordCloud] = useState<WordCloudData | null>(null);
+  const [openVraag, setOpenVraag] = useState<OpenVraagData | null>(null);
   const [pollDeepDive, setPollDeepDive] = useState<PollDeepDive | null>(null);
-  const [wcDeepDive, setWcDeepDive] = useState<WordCloudDeepDive | null>(null);
-  const [wcDeepQuestion, setWcDeepQuestion] = useState("");
+  const [openVraagDeepDive, setOpenVraagDeepDive] = useState<OpenVraagDeepDive | null>(null);
+  const [openVraagDeepQuestion, setOpenVraagDeepQuestion] = useState("");
   const [novaSummary, setNovaSummary] = useState<NovaSummaryData | null>(null);
   const [novaImage, setNovaImage] = useState<NovaImageData | null>(null);
   const [imageGenerating, setImageGenerating] = useState(false);
@@ -426,10 +426,10 @@ export function NovaConversation() {
       }
       setActiveModal("poll");
     } else {
-      // Wordcloud modal
+      // Open vraag modal
       if (showResults && activeQuestionResultsRef.current?.answers) {
         const answers = activeQuestionResultsRef.current.answers;
-        setWordCloud({
+        setOpenVraag({
           question: question.title,
           showResults: true,
           words: answers.map(a => ({
@@ -439,12 +439,12 @@ export function NovaConversation() {
           })),
         });
       } else {
-        setWordCloud({
+        setOpenVraag({
           question: question.title,
           showResults: false,
         });
       }
-      setActiveModal("wordcloud");
+      setActiveModal("openvraag");
     }
 
     return { success: true, message: `Vraag "${question.title}" wordt getoond` };
@@ -569,19 +569,21 @@ export function NovaConversation() {
         }
 
         setIsThinking(true);
-        if (name === "start_poll") {
-          setThinkingMessage("Poll starten...");
-        } else if (name === "start_wordcloud") {
-          setThinkingMessage("Vraag starten...");
+        if (name === "propose_poll") {
+          setThinkingMessage("Voorstel maken...");
+        } else if (name === "propose_open_vraag") {
+          setThinkingMessage("Voorstel maken...");
+        } else if (name === "confirm_question") {
+          setThinkingMessage("Vraag live zetten...");
         } else if (name === "get_poll_results") {
           setThinkingMessage("Resultaten ophalen...");
-        } else if (name === "get_wordcloud_results") {
+        } else if (name === "get_open_vraag_results") {
           setThinkingMessage("Antwoorden ophalen...");
         } else if (name === "analyze_poll_regions") {
           setThinkingMessage("Regio-analyse laden...");
         } else if (name === "analyze_poll_profiles") {
           setThinkingMessage("Profiel-analyse laden...");
-        } else if (name === "analyze_wordcloud_deep") {
+        } else if (name === "analyze_open_vraag_deep") {
           setThinkingMessage("Deep dive laden...");
         } else if (name === "show_summary") {
           setThinkingMessage("Samenvatting maken...");
@@ -608,21 +610,21 @@ export function NovaConversation() {
         setSearchPending({ query: data.query, result: data.result || "" });
         playNotificationSound();
       },
-      onWordCloudStart: (data) => {
-        console.log("Wordcloud started:", data);
-        setActiveModal("wordcloud");
-        setWordCloud({ ...data, showResults: false });
+      onOpenVraagStart: (data) => {
+        console.log("Open vraag started:", data);
+        setActiveModal("openvraag");
+        setOpenVraag({ ...data, showResults: false });
       },
-      onWordCloudResults: (data) => {
-        console.log("Wordcloud results:", data);
-        setActiveModal("wordcloud");
-        setWordCloud({ ...data, showResults: true });
+      onOpenVraagResults: (data) => {
+        console.log("Open vraag results:", data);
+        setActiveModal("openvraag");
+        setOpenVraag({ ...data, showResults: true });
       },
-      onWordCloudDeepDive: (data) => {
-        console.log("Wordcloud deep dive:", data);
-        setActiveModal("wcdeep");
-        setWcDeepDive(data.deepDive);
-        setWcDeepQuestion(data.question);
+      onOpenVraagDeepDive: (data) => {
+        console.log("Open vraag deep dive:", data);
+        setActiveModal("openvraagdeep");
+        setOpenVraagDeepDive(data.deepDive);
+        setOpenVraagDeepQuestion(data.question);
       },
       onNovaSummary: (data) => {
         console.log("Nova summary:", data);
@@ -2116,10 +2118,10 @@ export function NovaConversation() {
         </div>
       )}
 
-      {/* Word Cloud Display - only show when activeModal is wordcloud */}
-      {activeModal === "wordcloud" && wordCloud && (
-        <WordCloudDisplay
-          wordcloud={wordCloud}
+      {/* Open Vraag Display - only show when activeModal is openvraag */}
+      {activeModal === "openvraag" && openVraag && (
+        <OpenVraagDisplay
+          openVraag={openVraag}
           onClose={() => setActiveModal("none")}
         />
       )}
@@ -2144,11 +2146,11 @@ export function NovaConversation() {
         />
       )}
 
-      {/* Wordcloud Deep Dive */}
-      {activeModal === "wcdeep" && wcDeepDive && (
-        <WordCloudDeepDiveDisplay
-          data={wcDeepDive}
-          question={wcDeepQuestion}
+      {/* Open Vraag Deep Dive */}
+      {activeModal === "openvraagdeep" && openVraagDeepDive && (
+        <OpenVraagDeepDiveDisplay
+          data={openVraagDeepDive}
+          question={openVraagDeepQuestion}
           onClose={() => setActiveModal("none")}
         />
       )}

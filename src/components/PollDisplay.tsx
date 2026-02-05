@@ -218,12 +218,12 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
     >
       <div
         ref={containerRef}
-        className="relative w-full max-w-5xl mx-8"
+        className="relative w-full max-w-7xl mx-8"
         style={{
           background: "linear-gradient(145deg, #0d0d0d, #050505)",
           borderRadius: "16px",
           border: "3px solid rgba(25, 89, 105, 0.4)",
-          padding: "48px 56px",
+          padding: "64px 72px",
           boxShadow: `
             0 50px 100px rgba(0, 0, 0, 0.8),
             0 0 150px rgba(25, 89, 105, 0.1),
@@ -275,7 +275,7 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
               ref={voteCountRef}
               style={{
                 color: "#195969",
-                fontSize: "1.4rem",
+                fontSize: "1.8rem",
                 fontWeight: 700,
               }}
             >
@@ -288,7 +288,7 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
         <h2
           style={{
             color: "white",
-            fontSize: "2.4rem",
+            fontSize: "3rem",
             fontWeight: 700,
             marginBottom: "48px",
             lineHeight: 1.25,
@@ -306,8 +306,8 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
               display: "flex",
               justifyContent: "center",
               alignItems: "flex-end",
-              gap: "32px",
-              height: "380px",
+              gap: "48px",
+              height: "520px",
               padding: "0 20px",
             }}
           >
@@ -321,14 +321,29 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
-                    width: "100px",
+                    width: "140px",
                   }}
                 >
+                  {/* Percentage */}
+                  <span
+                    className="bar-percent"
+                    style={{
+                      color: "white",
+                      fontSize: "2.2rem",
+                      fontWeight: 800,
+                      fontVariantNumeric: "tabular-nums",
+                      marginBottom: "16px",
+                      height: "40px",
+                    }}
+                  >
+                    0%
+                  </span>
+
                   {/* Bar container */}
                   <div
                     style={{
-                      width: "80px",
-                      height: "260px",
+                      width: "110px",
+                      height: "400px",
                       background: "rgba(255, 255, 255, 0.06)",
                       borderRadius: "12px 12px 0 0",
                       position: "relative",
@@ -349,30 +364,16 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
                     />
                   </div>
 
-                  {/* Percentage */}
-                  <span
-                    className="bar-percent"
-                    style={{
-                      color: "white",
-                      fontSize: "1.6rem",
-                      fontWeight: 800,
-                      fontVariantNumeric: "tabular-nums",
-                      marginTop: "16px",
-                      height: "32px",
-                    }}
-                  >
-                    0%
-                  </span>
-
                   {/* Label - WHITE and aligned */}
                   <span
                     style={{
                       color: "white",
-                      fontSize: "0.95rem",
+                      fontSize: "1.2rem",
                       fontWeight: 500,
                       textAlign: "center",
-                      marginTop: "8px",
-                      height: "24px",
+                      marginTop: "24px",
+                      marginBottom: "16px",
+                      minHeight: "32px",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",

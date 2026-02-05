@@ -21,7 +21,6 @@
 html, body {
   margin: 0;
   padding: 0;
-  overflow: hidden;
 }
 
 body {
@@ -30,6 +29,18 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Admin pages need light theme */
+body:has(.admin-layout) {
+  background: #f8fafc;
+  color: #1e293b;
+  overflow: auto;
+}
+
+/* Nova main app needs overflow hidden */
+body:has(.nova-app) {
+  overflow: hidden;
 }
 
 /* Custom selection colors */

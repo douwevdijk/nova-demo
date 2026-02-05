@@ -3,14 +3,14 @@
 import { useState, useEffect, useMemo } from "react";
 import type { OpenAnswer } from "@/lib/realtime-client";
 
-interface WordCloudData {
+interface OpenVraagData {
   question: string;
   words?: OpenAnswer[];
   showResults?: boolean;
 }
 
-interface WordCloudDisplayProps {
-  wordcloud: WordCloudData | null;
+interface OpenVraagDisplayProps {
+  openVraag: OpenVraagData | null;
   onClose: () => void;
 }
 
@@ -26,43 +26,43 @@ function getMasonryColumns(items: OpenAnswer[], columnCount: number): OpenAnswer
 // Vary font size based on text length for masonry feel
 function getTileSize(text: string): { fontSize: string; padding: string } {
   const len = text.length;
-  if (len < 20) return { fontSize: "1.85rem", padding: "40px 38px 32px" };
-  if (len < 50) return { fontSize: "1.55rem", padding: "36px 34px 28px" };
-  if (len < 100) return { fontSize: "1.3rem", padding: "32px 30px 26px" };
-  return { fontSize: "1.15rem", padding: "28px 28px 24px" };
+  if (len < 20) return { fontSize: "2.1rem", padding: "40px 38px 32px" };
+  if (len < 50) return { fontSize: "1.8rem", padding: "36px 34px 28px" };
+  if (len < 100) return { fontSize: "1.55rem", padding: "32px 30px 26px" };
+  return { fontSize: "1.35rem", padding: "28px 28px 24px" };
 }
 
-export function WordCloudDisplay({ wordcloud, onClose }: WordCloudDisplayProps) {
+export function OpenVraagDisplay({ openVraag, onClose }: OpenVraagDisplayProps) {
   const [showCards, setShowCards] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
 
   const words = useMemo(() => {
-    if (!wordcloud?.words) return [];
-    return wordcloud.words;
-  }, [wordcloud?.words]);
+    if (!openVraag?.words) return [];
+    return openVraag.words;
+  }, [openVraag?.words]);
 
   // When results come in: show ALL cards at once (no stagger)
   useEffect(() => {
-    if (!wordcloud?.showResults || words.length === 0) return;
+    if (!openVraag?.showResults || words.length === 0) return;
     setShowCards(false);
     // Small delay then pop them all
     const timer = setTimeout(() => setShowCards(true), 150);
     return () => clearTimeout(timer);
-  }, [wordcloud?.showResults, words.length]);
+  }, [openVraag?.showResults, words.length]);
 
   useEffect(() => {
-    if (wordcloud) {
+    if (openVraag) {
       setShowCards(false);
       setTimeout(() => setIsVisible(true), 50);
     } else {
       setIsVisible(false);
       setShowCards(false);
     }
-  }, [wordcloud?.question]);
+  }, [openVraag?.question]);
 
-  if (!wordcloud) return null;
+  if (!openVraag) return null;
 
-  const showResults = wordcloud.showResults === true;
+  const showResults = openVraag.showResults === true;
   const columns = getMasonryColumns(words, 3);
 
   return (
@@ -167,7 +167,7 @@ export function WordCloudDisplay({ wordcloud, onClose }: WordCloudDisplayProps) 
               lineHeight: 1.2,
             }}
           >
-            {wordcloud.question}
+            {openVraag.question}
           </h1>
           <div
             style={{
@@ -211,8 +211,13 @@ export function WordCloudDisplay({ wordcloud, onClose }: WordCloudDisplayProps) 
             style={{
               position: "absolute",
               top: "28px",
-              left: "40px",
+              left: 0,
+              right: 0,
               zIndex: 50,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              textAlign: "center",
             }}
           >
             <div
@@ -250,13 +255,14 @@ export function WordCloudDisplay({ wordcloud, onClose }: WordCloudDisplayProps) 
             </div>
             <h2
               style={{
-                fontSize: "1.5rem",
-                fontWeight: 600,
+                fontSize: "2.2rem",
+                fontWeight: 700,
                 color: "rgba(255, 255, 255, 0.9)",
-                maxWidth: "600px",
+                maxWidth: "900px",
+                lineHeight: 1.2,
               }}
             >
-              {wordcloud.question}
+              {openVraag.question}
             </h2>
           </div>
 
@@ -264,7 +270,7 @@ export function WordCloudDisplay({ wordcloud, onClose }: WordCloudDisplayProps) 
           <div
             style={{
               position: "absolute",
-              top: "140px",
+              top: "200px",
               left: "0",
               right: "0",
               bottom: "80px",
@@ -296,12 +302,17 @@ export function WordCloudDisplay({ wordcloud, onClose }: WordCloudDisplayProps) 
                     const globalIdx = colIdx + rowIdx * columns.length;
                     const tileSize = getTileSize(word.text);
 
+                    const dotColor = globalIdx % 2 === 0 ? "#f30349" : "#195969";
+
                     return (
                       <div
                         key={`${word.text}-${globalIdx}`}
                         style={{
-                          background: "rgba(255, 255, 255, 0.07)",
-                          border: "1px solid rgba(255, 255, 255, 0.15)",
+                          background:
+                            "linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)",
+                          backdropFilter: "blur(10px)",
+                          WebkitBackdropFilter: "blur(10px)",
+                          border: "1px solid rgba(255, 255, 255, 0.10)",
                           borderRadius: "20px",
                           padding: tileSize.padding,
                           opacity: showCards ? 1 : 0,
@@ -313,7 +324,7 @@ export function WordCloudDisplay({ wordcloud, onClose }: WordCloudDisplayProps) 
                           style={{
                             color: "white",
                             fontSize: tileSize.fontSize,
-                            fontWeight: 500,
+                            fontWeight: 600,
                             lineHeight: 1.5,
                             margin: 0,
                             marginBottom: "18px",
@@ -326,6 +337,8 @@ export function WordCloudDisplay({ wordcloud, onClose }: WordCloudDisplayProps) 
                             display: "flex",
                             alignItems: "center",
                             gap: "10px",
+                            borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+                            paddingTop: "14px",
                           }}
                         >
                           <div
@@ -333,7 +346,7 @@ export function WordCloudDisplay({ wordcloud, onClose }: WordCloudDisplayProps) 
                               width: "8px",
                               height: "8px",
                               borderRadius: "50%",
-                              background: "#f30349",
+                              background: dotColor,
                               flexShrink: 0,
                             }}
                           />

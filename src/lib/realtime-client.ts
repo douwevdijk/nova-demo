@@ -74,16 +74,16 @@ export interface OpenAnswer {
   profile?: string;
 }
 
-export interface WordCloudDeepDive {
+export interface OpenVraagDeepDive {
   byRegion: { region: string; topAnswers: OpenAnswer[]; insight: string }[];
   byProfile: { profile: string; topAnswers: OpenAnswer[]; insight: string }[];
 }
 
-export interface WordCloudData {
+export interface OpenVraagData {
   question: string;
   words?: OpenAnswer[];
   showResults?: boolean;
-  deepDive?: WordCloudDeepDive;
+  deepDive?: OpenVraagDeepDive;
 }
 
 export interface NovaSummaryData {
@@ -118,11 +118,11 @@ export interface RealtimeClientConfig {
   onFunctionCallEnd?: () => void;
   onWebSearchStart?: (query: string) => void;
   onWebSearchResult?: (data: WebSearchData) => void;
-  onWordCloudStart?: (data: WordCloudData) => void;
-  onWordCloudResults?: (data: WordCloudData) => void;
+  onOpenVraagStart?: (data: OpenVraagData) => void;
+  onOpenVraagResults?: (data: OpenVraagData) => void;
   onPollDeepDiveRegions?: (data: PollDeepDive) => void;
   onPollDeepDiveProfiles?: (data: PollDeepDive) => void;
-  onWordCloudDeepDive?: (data: { deepDive: WordCloudDeepDive; question: string }) => void;
+  onOpenVraagDeepDive?: (data: { deepDive: OpenVraagDeepDive; question: string }) => void;
   onNovaSummary?: (data: NovaSummaryData) => void;
   onImageGenerating?: () => void;
   onImageReady?: (data: NovaImageData) => void;
@@ -148,9 +148,18 @@ export class RealtimeClient {
   private animationFrameId: number | null = null;
   private novaAnimationFrameId: number | null = null;
   private currentPoll: PollData | null = null;
-  private currentWordCloud: WordCloudData | null = null;
+  private currentOpenVraag: OpenVraagData | null = null;
   private activeResponseId: string | null = null;
   private pendingResponseCreate: (() => void)[] = [];
+
+  // Pending proposal awaiting confirmation from Rens
+  private pendingProposal: {
+    type: "poll" | "open_vraag";
+    question: string;
+    options?: string[];
+    seedVotes?: { option: string; count: number }[];
+    seedAnswers?: string[];
+  } | null = null;
 
   // Current question tracking for Firebase
   private currentQuestionId: string | null = null;
@@ -489,7 +498,7 @@ export class RealtimeClient {
           eventType.startsWith("conversation.") ||
           eventType.startsWith("input_audio")
         ) {
-          console.log("Event:", eventType);
+          //console.log("Event:", eventType);
         }
     }
   }
@@ -577,9 +586,19 @@ export class RealtimeClient {
     let result: string;
 
     try {
+
+      console.log(call && call.name);
+
       switch (call.name) {
-        case "start_poll":
-          result = await this.executePollStart(call.arguments);
+        
+        case "propose_poll":
+          result = this.executeProposePoll(call.arguments);
+          break;
+        case "propose_open_vraag":
+          result = this.executeProposeOpenVraag(call.arguments);
+          break;
+        case "confirm_question":
+          result = await this.executeConfirmQuestion();
           break;
         case "get_poll_results":
           result = await this.executeGetPollResults();
@@ -595,14 +614,11 @@ export class RealtimeClient {
         case "analyze_poll_profiles":
           result = await this.executeAnalyzePollDeep("profiles");
           break;
-        case "start_wordcloud":
-          result = await this.executeWordCloudStart(call.arguments);
-          break;
         case "get_wordcloud_results":
-          result = await this.executeGetWordCloudResults();
+          result = await this.executeGetOpenVraagResults();
           break;
         case "analyze_wordcloud_deep":
-          result = await this.executeAnalyzeWordCloudDeep();
+          result = await this.executeAnalyzeOpenVraagDeep();
           break;
         case "show_summary":
           result = await this.executeShowSummary(call.arguments);
@@ -630,7 +646,7 @@ export class RealtimeClient {
     }
 
     // Send function result back to OpenAI
-    this.sendFunctionResult(call.call_id, result);
+    this.sendFunctionResult(call.call_id, result, call.name);
   }
 
   // Store pre-generated results separately so they're not shown on start
@@ -643,109 +659,72 @@ export class RealtimeClient {
     deepDive: PollDeepDive;
   } | null = null;
 
-  private async executePollStart(argsJson: string): Promise<string> {
+  private executeProposePoll(argsJson: string): string {
     const args = this.safeParseArgs(argsJson) as {
       question: string;
       options: string[];
       seedVotes?: { option: string; count: number }[];
     };
 
-    // Check if QuestionManager has an active question
+    // Check if QuestionManager has an active poll question — reuse as preview
     if (this.config.questionManager) {
       const activeInfo = this.config.questionManager.getActiveQuestionInfo();
       if (activeInfo.hasActiveQuestion && activeInfo.question?.type === "poll") {
-        // Use existing question - don't create new one
-        console.log("[RealtimeClient] Using existing active poll question:", activeInfo.question.id);
+        console.log("[RealtimeClient] Using existing active poll question as preview:", activeInfo.question.id);
 
-        const result = this.config.questionManager.showQuestion();
+        this.config.questionManager.showQuestion();
 
-        // Also set up local state for deep dive etc.
         this.currentQuestionId = activeInfo.question.id;
         this.currentPoll = {
           question: activeInfo.question.title,
           options: activeInfo.question.options || [],
         };
-        this.pendingPollResults = this.generatePollResults(activeInfo.question.options || []);
+        this.pendingProposal = {
+          type: "poll",
+          question: activeInfo.question.title,
+          options: activeInfo.question.options || [],
+          seedVotes: args.seedVotes,
+        };
 
         return JSON.stringify({
           success: true,
-          message: "De vraag staat live. Het publiek kan nu stemmen.",
+          isProposal: true,
+          message: "Het voorstel wordt getoond aan Rens. Wacht op goedkeuring voordat de poll live gaat.",
           question: activeInfo.question.title,
           options: activeInfo.question.options,
-          questionId: activeInfo.question.id,
           existingQuestion: true,
         });
       }
     }
 
-    // No existing active poll - create new one
-    const questionId = `poll_${Date.now()}`;
-    this.currentQuestionId = questionId;
+    // Store proposal — NO Firebase write yet
+    this.pendingProposal = {
+      type: "poll",
+      question: args.question,
+      options: args.options,
+      seedVotes: args.seedVotes,
+    };
 
-    try {
-      // 1. Create question in Firebase (with active: true)
-      await createQuestion(this.campaignId, questionId, {
-        title: args.question,
-        type: "multi",
-        options: args.options,
-      });
+    const poll: PollData = {
+      question: args.question,
+      options: args.options,
+      // NO results — preview only
+    };
 
-      // 2. Deactivate all other questions, activate this one
-      await setQuestionActive(this.campaignId, questionId);
+    this.currentPoll = poll;
 
-      // 3. Add seed votes if provided, otherwise generate them
-      const seedVotes = args.seedVotes || this.generateDefaultSeedVotes(args.options);
-      await addSeedVotes(this.campaignId, questionId, seedVotes, args.options);
-
-      // Also pre-generate local results for deep dive (keeping existing functionality)
-      this.pendingPollResults = this.generatePollResults(args.options);
-
-      const poll: PollData = {
-        question: args.question,
-        options: args.options,
-        // NO results here - only options shown first
-      };
-
-      this.currentPoll = poll;
-
-      // Notify UI - shows question + options ONLY
-      if (this.config.onPollStart) {
-        this.config.onPollStart(poll);
-      }
-
-      const totalSeedVotes = seedVotes.reduce((sum, s) => sum + s.count, 0);
-
-      return JSON.stringify({
-        success: true,
-        message: "De poll staat live. Het publiek kan nu stemmen.",
-        question: args.question,
-        options: args.options,
-        questionId,
-        campaignId: this.campaignId,
-      });
-    } catch (error) {
-      console.error("Failed to create poll in Firebase:", error);
-      // Fallback to local-only mode
-      this.pendingPollResults = this.generatePollResults(args.options);
-
-      const poll: PollData = {
-        question: args.question,
-        options: args.options,
-      };
-
-      this.currentPoll = poll;
-
-      if (this.config.onPollStart) {
-        this.config.onPollStart(poll);
-      }
-
-      return JSON.stringify({
-        success: true,
-        message: "De poll staat live.",
-        question: args.question,
-        options: args.options,
-      });
+    // Notify UI — shows question + options as preview
+    if (this.config.onPollStart) {
+      this.config.onPollStart(poll);
     }
+
+    return JSON.stringify({
+      success: true,
+      isProposal: true,
+      message: "Het voorstel wordt getoond aan Rens. Wacht op goedkeuring voordat de poll live gaat.",
+      question: args.question,
+      options: args.options,
+    });
   }
 
   // Generate default seed votes when Nova doesn't provide them
@@ -1046,118 +1025,185 @@ export class RealtimeClient {
       });
   }
 
-  private async executeWordCloudStart(argsJson: string): Promise<string> {
+  private executeProposeOpenVraag(argsJson: string): string {
     const args = this.safeParseArgs(argsJson) as {
       question: string;
       seedAnswers?: string[];
     };
 
-    // Check if QuestionManager has an active open question
+    // Check if QuestionManager has an active open question — reuse as preview
     if (this.config.questionManager) {
       const activeInfo = this.config.questionManager.getActiveQuestionInfo();
       if (activeInfo.hasActiveQuestion && activeInfo.question?.type === "open") {
-        // Use existing question - don't create new one
-        console.log("[RealtimeClient] Using existing active open question:", activeInfo.question.id);
+        console.log("[RealtimeClient] Using existing active open question as preview:", activeInfo.question.id);
 
-        const result = this.config.questionManager.showQuestion();
+        this.config.questionManager.showQuestion();
 
-        // Also set up local state for deep dive etc.
         this.currentQuestionId = activeInfo.question.id;
-        const words = this.generateWordCloudWords(activeInfo.question.title);
-        const deepDive = this.generateWordCloudDeepDive(activeInfo.question.title, words);
-
-        this.currentWordCloud = {
+        this.currentOpenVraag = {
           question: activeInfo.question.title,
           showResults: false,
-          words,
-          deepDive,
+        };
+        this.pendingProposal = {
+          type: "open_vraag",
+          question: activeInfo.question.title,
+          seedAnswers: args.seedAnswers,
         };
 
         return JSON.stringify({
           success: true,
-          message: "De vraag staat live. Het publiek kan nu antwoorden.",
+          isProposal: true,
+          message: "Het voorstel wordt getoond aan Rens. Wacht op goedkeuring voordat de vraag live gaat.",
           question: activeInfo.question.title,
-          questionId: activeInfo.question.id,
           existingQuestion: true,
         });
       }
     }
 
-    // No existing active open question - create new one
-    const questionId = `open_${Date.now()}`;
-    this.currentQuestionId = questionId;
+    // Store proposal — NO Firebase write yet
+    this.pendingProposal = {
+      type: "open_vraag",
+      question: args.question,
+      seedAnswers: args.seedAnswers,
+    };
 
-    try {
-      // 1. Create question in Firebase
-      await createQuestion(this.campaignId, questionId, {
-        title: args.question,
-        type: "open",
-        maxLength: 150,
-      });
+    const openVraagData: OpenVraagData = {
+      question: args.question,
+      showResults: false,
+    };
 
-      // 2. Deactivate all other questions, activate this one
-      await setQuestionActive(this.campaignId, questionId);
+    this.currentOpenVraag = openVraagData;
 
-      // 3. Add seed answers - either from Nova or generated locally
-      const seedAnswers = args.seedAnswers || this.generateLocalSeedAnswers(args.question);
-      await addSeedAnswers(this.campaignId, questionId, seedAnswers);
+    // Notify UI — shows question only as preview
+    if (this.config.onOpenVraagStart) {
+      this.config.onOpenVraagStart(openVraagData);
+    }
 
-      // Generate local data for display (existing functionality)
-      const words = this.generateWordCloudWords(args.question);
-      const deepDive = this.generateWordCloudDeepDive(args.question, words);
+    return JSON.stringify({
+      success: true,
+      isProposal: true,
+      message: "Het voorstel wordt getoond aan Rens. Wacht op goedkeuring voordat de vraag live gaat.",
+      question: args.question,
+    });
+  }
 
-      const wordcloudData: WordCloudData = {
-        question: args.question,
-        showResults: false,
-        words,
-        deepDive,
+  private async executeConfirmQuestion(): Promise<string> {
+    if (!this.pendingProposal) {
+      return JSON.stringify({ error: "Geen voorstel om te bevestigen. Maak eerst een voorstel met propose_poll of propose_open_vraag." });
+    }
+
+    // Grab and clear immediately to prevent double-confirm
+    const proposal = this.pendingProposal;
+    this.pendingProposal = null;
+
+    if (proposal.type === "poll") {
+      const options = proposal.options || [];
+      const questionId = `poll_${Date.now()}`;
+      this.currentQuestionId = questionId;
+
+      try {
+        // 1. Create question in Firebase
+        await createQuestion(this.campaignId, questionId, {
+          title: proposal.question,
+          type: "multi",
+          options,
+        });
+
+        // 2. Activate this question
+        await setQuestionActive(this.campaignId, questionId);
+
+        // 3. Add seed votes
+        const seedVotes = proposal.seedVotes || this.generateDefaultSeedVotes(options);
+        await addSeedVotes(this.campaignId, questionId, seedVotes, options);
+      } catch (error) {
+        console.error("Failed to create poll in Firebase:", error);
+        // Continue with local results — show must go on
+      }
+
+      // Generate results and show DIRECTLY
+      this.pendingPollResults = this.generatePollResults(options);
+
+      this.currentPoll = {
+        question: proposal.question,
+        options,
+        results: this.pendingPollResults.results,
+        deepDive: this.pendingPollResults.deepDive,
       };
 
-      this.currentWordCloud = wordcloudData;
-
-      // Notify UI - shows question only, no results yet
-      if (this.config.onWordCloudStart) {
-        this.config.onWordCloudStart(wordcloudData);
+      if (this.config.onPollResults) {
+        this.config.onPollResults(this.currentPoll);
       }
 
       return JSON.stringify({
         success: true,
-        message: "De open vraag staat live. Het publiek kan nu antwoorden.",
-        question: args.question,
-        questionId,
-        campaignId: this.campaignId,
-      });
-    } catch (error) {
-      console.error("Failed to create wordcloud in Firebase:", error);
-      // Fallback to local-only mode
-      const words = this.generateWordCloudWords(args.question);
-      const deepDive = this.generateWordCloudDeepDive(args.question, words);
-
-      const wordcloudData: WordCloudData = {
-        question: args.question,
-        showResults: false,
-        words,
-        deepDive,
-      };
-
-      this.currentWordCloud = wordcloudData;
-
-      if (this.config.onWordCloudStart) {
-        this.config.onWordCloudStart(wordcloudData);
-      }
-
-      return JSON.stringify({
-        success: true,
-        message: "De open vraag staat live.",
-        question: args.question,
+        message: `Poll is live! ${this.pendingPollResults.totalVotes} stemmen. "${this.pendingPollResults.winner}" wint met ${this.pendingPollResults.winnerPercentage}%.`,
+        question: proposal.question,
+        results: this.pendingPollResults.results,
+        totalVotes: this.pendingPollResults.totalVotes,
+        winner: this.pendingPollResults.winner,
+        winnerPercentage: this.pendingPollResults.winnerPercentage,
+        summary: this.pendingPollResults.summary,
       });
     }
+
+    if (proposal.type === "open_vraag") {
+      const questionId = `open_${Date.now()}`;
+      this.currentQuestionId = questionId;
+
+      try {
+        // 1. Create question in Firebase
+        await createQuestion(this.campaignId, questionId, {
+          title: proposal.question,
+          type: "open",
+          maxLength: 150,
+        });
+
+        // 2. Activate this question
+        await setQuestionActive(this.campaignId, questionId);
+
+        // 3. Add seed answers
+        const seedAnswers = proposal.seedAnswers || this.generateLocalSeedAnswers(proposal.question);
+        await addSeedAnswers(this.campaignId, questionId, seedAnswers);
+      } catch (error) {
+        console.error("Failed to create open vraag in Firebase:", error);
+        // Continue with local results
+      }
+
+      // Generate words and deep dive, show DIRECTLY
+      const words = this.generateOpenVraagWords(proposal.question);
+      const deepDive = this.generateOpenVraagDeepDive(proposal.question, words);
+
+      this.currentOpenVraag = {
+        question: proposal.question,
+        showResults: true,
+        words,
+        deepDive,
+      };
+
+      if (this.config.onOpenVraagResults) {
+        this.config.onOpenVraagResults(this.currentOpenVraag);
+      }
+
+      const topWords = words.slice(0, 10).map(w => `${w.text} (${w.count}x)`).join(", ");
+      const totalResponses = words.reduce((sum, w) => sum + w.count, 0);
+
+      return JSON.stringify({
+        success: true,
+        message: `Open vraag is live! ${totalResponses} antwoorden. Meest genoemd: ${topWords}`,
+        question: proposal.question,
+        totalResponses,
+        topWords,
+        allWords: words,
+      });
+    }
+
+    return JSON.stringify({ error: "Onbekend voorstel type" });
   }
 
   // Generate local seed answers when Nova doesn't provide them
   private generateLocalSeedAnswers(question: string): string[] {
     // Use existing word generation but extract just the text
-    const words = this.generateWordCloudWords(question);
+    const words = this.generateOpenVraagWords(question);
     // Get unique answer texts (top 12)
     const answers = words
       .slice(0, 12)
@@ -1165,7 +1211,7 @@ export class RealtimeClient {
     return answers;
   }
 
-  private async executeGetWordCloudResults(): Promise<string> {
+  private async executeGetOpenVraagResults(): Promise<string> {
     // Try to get results from QuestionManager (via listener, always up-to-date)
     if (this.config.questionManager) {
       const activeData = this.config.questionManager.getActiveQuestionWithResults();
@@ -1199,8 +1245,8 @@ export class RealtimeClient {
         // Sort by count descending
         words.sort((a, b) => b.count - a.count);
 
-        // Update currentWordCloud for UI
-        this.currentWordCloud = {
+        // Update currentOpenVraag for UI
+        this.currentOpenVraag = {
           question: activeData.question.title,
           showResults: true,
           words,
@@ -1208,8 +1254,8 @@ export class RealtimeClient {
         this.currentQuestionId = activeData.question.id;
 
         // Notify UI to show results
-        if (this.config.onWordCloudResults) {
-          this.config.onWordCloudResults(this.currentWordCloud);
+        if (this.config.onOpenVraagResults) {
+          this.config.onOpenVraagResults(this.currentOpenVraag);
         }
 
         const topWords = words.slice(0, 10).map(w => `${w.text} (${w.count}x)`).join(", ");
@@ -1226,20 +1272,20 @@ export class RealtimeClient {
       }
     }
 
-    // Fallback: check if we have currentWordCloud from earlier
-    if (!this.currentWordCloud) {
-      return JSON.stringify({ error: "Geen actieve wordcloud gevonden" });
+    // Fallback: check if we have currentOpenVraag from earlier
+    if (!this.currentOpenVraag) {
+      return JSON.stringify({ error: "Geen actieve open vraag gevonden" });
     }
 
     // Fallback to locally generated words
-    const words = this.currentWordCloud.words || [];
-    console.log("[WordCloud] Using locally generated words as fallback");
+    const words = this.currentOpenVraag.words || [];
+    console.log("[OpenVraag] Using locally generated words as fallback");
 
-    // Update wordcloud with results
-    this.currentWordCloud.showResults = true;
+    // Update open vraag with results
+    this.currentOpenVraag.showResults = true;
 
-    if (this.config.onWordCloudResults) {
-      this.config.onWordCloudResults(this.currentWordCloud);
+    if (this.config.onOpenVraagResults) {
+      this.config.onOpenVraagResults(this.currentOpenVraag);
     }
 
     // Return words in result so AI remembers them
@@ -1248,7 +1294,7 @@ export class RealtimeClient {
 
     return JSON.stringify({
       success: true,
-      question: this.currentWordCloud.question,
+      question: this.currentOpenVraag.question,
       totalResponses,
       topWords,
       allWords: words,
@@ -1294,7 +1340,7 @@ export class RealtimeClient {
   }
 
   // Generate open answers - each is a unique answer from one person (count=1)
-  private generateWordCloudWords(question: string): OpenAnswer[] {
+  private generateOpenVraagWords(question: string): OpenAnswer[] {
     const baseAnswers = this.getOpenAnswersForQuestion(question);
     const usedNames = new Set<string>();
 
@@ -1623,17 +1669,17 @@ export class RealtimeClient {
     });
   }
 
-  private async executeAnalyzeWordCloudDeep(): Promise<string> {
-    if (!this.currentWordCloud || !this.currentWordCloud.deepDive) {
-      return JSON.stringify({ error: "Geen actieve wordcloud met deep dive data gevonden" });
+  private async executeAnalyzeOpenVraagDeep(): Promise<string> {
+    if (!this.currentOpenVraag || !this.currentOpenVraag.deepDive) {
+      return JSON.stringify({ error: "Geen actieve open vraag met deep dive data gevonden" });
     }
 
-    const deepDive = this.currentWordCloud.deepDive;
-    const question = this.currentWordCloud.question;
+    const deepDive = this.currentOpenVraag.deepDive;
+    const question = this.currentOpenVraag.question;
 
     // Notify UI
-    if (this.config.onWordCloudDeepDive) {
-      this.config.onWordCloudDeepDive({ deepDive, question });
+    if (this.config.onOpenVraagDeepDive) {
+      this.config.onOpenVraagDeepDive({ deepDive, question });
     }
 
     // Build summary for AI memory
@@ -1652,8 +1698,8 @@ export class RealtimeClient {
     });
   }
 
-  // Generate deep dive data for wordcloud
-  private generateWordCloudDeepDive(question: string, answers: OpenAnswer[]): WordCloudDeepDive {
+  // Generate deep dive data for open vraag
+  private generateOpenVraagDeepDive(question: string, answers: OpenAnswer[]): OpenVraagDeepDive {
     const regions = ["Randstad", "Noord", "Zuid", "Oost"];
     const profiles = ["Management", "HR & Talent", "IT & Tech", "Marketing & Sales"];
 
@@ -1706,13 +1752,23 @@ export class RealtimeClient {
   }
 
   // Safely request a new response - queues if one is already active
-  private requestResponse(): void {
+  private requestResponse(functionName?: string): void {
     if (!this.dataChannel || this.dataChannel.readyState !== "open") return;
 
     const send = () => {
       if (!this.dataChannel || this.dataChannel.readyState !== "open") return;
-      console.log("Sending response.create");
-      this.dataChannel.send(JSON.stringify({ type: "response.create" }));
+
+      // Custom instructions voor results functies
+      if (functionName === "get_poll_results" || functionName === "get_wordcloud_results") {
+        const instructions = "ZOOM IN op deze resultaten! Wat valt op? Wat is verrassend? Vergelijk de uitkomsten. Lees niet de percentages op, maar trek meteen een pakkende conclusie ( benoem niet specifiek dat je een conclusie trekt ). Maak het spannend!";
+
+        this.dataChannel!.send(JSON.stringify({
+          type: "response.create",
+          response: { instructions }
+        }));
+      } else {
+        this.dataChannel!.send(JSON.stringify({ type: "response.create" }));
+      }
     };
 
     if (this.activeResponseId) {
@@ -1723,7 +1779,7 @@ export class RealtimeClient {
     }
   }
 
-  private sendFunctionResult(callId: string, result: string): void {
+  private sendFunctionResult(callId: string, result: string, functionName?: string): void {
     if (!this.dataChannel || this.dataChannel.readyState !== "open") {
       console.error("Data channel not available for function result");
       return;
@@ -1747,7 +1803,7 @@ export class RealtimeClient {
 
     // Trigger a new response with delay to let server process the function output
     setTimeout(() => {
-      this.requestResponse();
+      this.requestResponse(functionName);
     }, 200);
   }
 
@@ -1803,7 +1859,7 @@ export class RealtimeClient {
         },
       };
 
-      console.log("Sending conversation event:", message);
+      //console.log("Sending conversation event:", message);
       this.dataChannel!.send(JSON.stringify(conversationItem));
 
       // Trigger Nova to respond (safely queued if response is active)

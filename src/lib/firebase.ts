@@ -1,6 +1,6 @@
 // Firebase configuration for Nova Vote
 import { initializeApp, getApps } from "firebase/app";
-import { getDatabase, ref, set, get, onValue, off, serverTimestamp } from "firebase/database";
+import { getDatabase, ref, set, get, onValue, off, serverTimestamp, remove, push, update } from "firebase/database";
 
 // Firebase config - using the existing me-do project
 const firebaseConfig = {
@@ -65,12 +65,19 @@ export async function createQuestion(
 ): Promise<void> {
   const questionRef = ref(database, `/nova-vote/campaigns/${campaignId}/questions/${questionId}`);
 
-  await set(questionRef, {
+  // Strip undefined values - Firebase rejects them
+  const data: Record<string, unknown> = {
     id: questionId,
-    ...questionData,
+    title: questionData.title,
+    type: questionData.type,
     active: true,
     createdAt: serverTimestamp(),
-  });
+  };
+  if (questionData.options !== undefined) data.options = questionData.options;
+  if (questionData.correctAnswerIndex !== undefined) data.correctAnswerIndex = questionData.correctAnswerIndex;
+  if (questionData.maxLength !== undefined) data.maxLength = questionData.maxLength;
+
+  await set(questionRef, data);
 }
 
 // Deactivate a question
@@ -343,4 +350,4 @@ export function subscribeToActiveQuestionResults(
   return () => off(resultsRef);
 }
 
-export { database, ref, set, get, onValue, off, serverTimestamp };
+export { database, ref, set, get, onValue, off, serverTimestamp, remove, push, update };

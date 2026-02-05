@@ -27,6 +27,24 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `
+          // Polyfill: Safari doesn't support 'detail' in performance.measure() options
+          try {
+            performance.measure('__test__', { start: 0, end: 0, detail: {} });
+          } catch (e) {
+            var origMeasure = performance.measure.bind(performance);
+            performance.measure = function(name, startOrOptions, end) {
+              if (startOrOptions && typeof startOrOptions === 'object' && 'detail' in startOrOptions) {
+                var opts = { start: startOrOptions.start, end: startOrOptions.end };
+                return origMeasure(name, opts);
+              }
+              return origMeasure(name, startOrOptions, end);
+            };
+          }
+          try { performance.clearMeasures('__test__'); } catch(e) {}
+        `}} />
+      </head>
       <body className={`${spaceGrotesk.variable} ${cormorant.variable} font-sans antialiased`}>
         {children}
       </body>
