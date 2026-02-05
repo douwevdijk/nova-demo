@@ -296,8 +296,10 @@ export function subscribeToQuestions(
 
   onValue(questionsRef, (snapshot) => {
     const questions = snapshot.val() || {};
-    const questionsList = Object.values(questions) as PreparedQuestion[];
-    // Sort by order
+    const questionsList = (Object.values(questions) as Record<string, unknown>[]).map((q) => ({
+      ...q,
+      type: q.type === "multi" ? "poll" : q.type,
+    })) as PreparedQuestion[];
     questionsList.sort((a, b) => (a.order || 0) - (b.order || 0));
     callback(questionsList);
   });
