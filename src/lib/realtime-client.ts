@@ -77,6 +77,8 @@ export interface OpenAnswer {
 }
 
 export interface OpenVraagDeepDive {
+  overallInsight: string;
+  keyCards: { title: string; bullets: string[] }[];
   byRegion: { region: string; topAnswers: OpenAnswer[]; insight: string }[];
   byProfile: { profile: string; topAnswers: OpenAnswer[]; insight: string }[];
 }
@@ -1792,17 +1794,14 @@ export class RealtimeClient {
     }
 
     // Build summary for AI memory
-    const regionSummary = deepDive.byRegion.map(r =>
-      `${r.region}: "${r.topAnswers[0].text}" (${r.topAnswers[0].count}x) - ${r.insight}`
-    ).join("\n");
-    const profileSummary = deepDive.byProfile.map(p =>
-      `${p.profile}: "${p.topAnswers[0].text}" (${p.topAnswers[0].count}x) - ${p.insight}`
+    const cardSummary = deepDive.keyCards.map(c =>
+      `${c.title}: ${c.bullets.join("; ")}`
     ).join("\n");
 
     return JSON.stringify({
       success: true,
       question,
-      message: `Deep dive voor open vraag "${question}".\n\nPer regio:\n${regionSummary}\n\nPer profiel:\n${profileSummary}`,
+      message: `Deep dive voor open vraag "${question}".\n\nOverall: ${deepDive.overallInsight}\n\nKey insights:\n${cardSummary}`,
       deepDive,
     });
   }
@@ -1857,7 +1856,44 @@ export class RealtimeClient {
       };
     });
 
-    return { byRegion, byProfile };
+    // Generate combined overall insight
+    const topOverall = [...answers].sort(() => Math.random() - 0.5).slice(0, 3);
+    const overallInsight = `"${topOverall[0].text}" is veruit het meest genoemde thema (${this.randomCount(25, 45)}%), gevolgd door "${topOverall[1].text}" en "${topOverall[2].text}". Opvallend: de Randstad focust op tempo, terwijl het Noorden juist samenwerking benadrukt. Management en IT & Tech zijn het hier grotendeels over eens.`;
+
+    // Generate 4 key cards combining region + profile insights
+    const keyCards = [
+      {
+        title: "Regionale verschillen",
+        bullets: [
+          `Randstad noemt "${byRegion[0].topAnswers[0].text}" het vaakst (${byRegion[0].topAnswers[0].count}x)`,
+          `Noord en Oost focussen meer op "${byRegion[1].topAnswers[0].text}"`,
+          `Zuid wijkt af met nadruk op "${byRegion[2].topAnswers[0].text}"`,
+        ],
+      },
+      {
+        title: "Management vs. IT",
+        bullets: [
+          `Management kiest voor "${byProfile[0].topAnswers[0].text}" (${byProfile[0].topAnswers[0].count}x)`,
+          `IT & Tech zet in op "${byProfile[2].topAnswers[0].text}" (${byProfile[2].topAnswers[0].count}x)`,
+        ],
+      },
+      {
+        title: "HR & Talent perspectief",
+        bullets: [
+          `"${byProfile[1].topAnswers[0].text}" domineert bij HR (${byProfile[1].topAnswers[0].count}x)`,
+          `Opvallend weinig overlap met Management-prioriteiten`,
+        ],
+      },
+      {
+        title: "Verrassende inzichten",
+        bullets: [
+          `"${topOverall[1].text}" scoort hoog in alle regio's behalve Zuid`,
+          `Marketing & Sales en HR zijn het verrassend eens over "${byProfile[3].topAnswers[0].text}"`,
+        ],
+      },
+    ];
+
+    return { overallInsight, keyCards, byRegion, byProfile };
   }
 
   // Safely request a new response - queues if one is already active

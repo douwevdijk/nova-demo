@@ -206,19 +206,23 @@ export function OpenVraagDisplay({ openVraag, onClose }: OpenVraagDisplayProps) 
 
       {/* Results: Masonry tiles - BIG, centered, popping */}
       {showResults && (
-        <>
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
           {/* Header */}
           <div
             style={{
-              position: "absolute",
-              top: "28px",
-              left: 0,
-              right: 0,
-              zIndex: 50,
+              paddingTop: "28px",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               textAlign: "center",
+              flexShrink: 0,
             }}
           >
             <div
@@ -271,15 +275,12 @@ export function OpenVraagDisplay({ openVraag, onClose }: OpenVraagDisplayProps) 
           {/* Masonry grid - 3 columns, big tiles, centered */}
           <div
             style={{
-              position: "absolute",
-              top: "280px",
-              left: "0",
-              right: "0",
-              bottom: "80px",
+              flex: 1,
               display: "flex",
               justifyContent: "center",
-              padding: "0 60px",
-              overflow: "hidden",
+              padding: "24px 60px 0",
+              overflowY: "auto",
+              minHeight: 0,
             }}
           >
             <div
@@ -373,14 +374,11 @@ export function OpenVraagDisplay({ openVraag, onClose }: OpenVraagDisplayProps) 
           {/* Footer */}
           <div
             style={{
-              position: "absolute",
-              bottom: "24px",
-              left: "40px",
-              right: "40px",
+              flexShrink: 0,
+              padding: "16px 40px 24px",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              zIndex: 50,
             }}
           >
             <span
@@ -423,7 +421,7 @@ export function OpenVraagDisplay({ openVraag, onClose }: OpenVraagDisplayProps) 
               </span>
             </div>
           </div>
-        </>
+        </div>
       )}
 
       <style jsx global>{`

@@ -218,9 +218,9 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
           inset: 0,
           display: "flex",
           flexDirection: "column",
-          justifyContent: "center",
           padding: "48px 80px",
           opacity: 0,
+          overflowY: "auto",
         }}
       >
         {/* Close button */}
@@ -256,6 +256,7 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
           x
         </button>
 
+        <div style={{ margin: "auto 0" }}>
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <span
@@ -575,6 +576,7 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
               </button>
             )}
           </div>
+        </div>
         </div>
       </div>
 

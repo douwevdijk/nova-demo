@@ -26,6 +26,8 @@ const REGION_COLORS: Record<string, string> = {
   "Oost": "#f59e0b",
 };
 
+const CARD_COLORS = ["#f30349", "#3b82f6", "#a78bfa", "#f59e0b"];
+
 export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepDiveDisplayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [visibleRegions, setVisibleRegions] = useState(0);
@@ -236,17 +238,20 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
 
             {/* Profile cards with key insights */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
-              {data.profiles.map((profile, idx) => (
+              {data.profiles.map((profile, idx) => {
+                const cardColor = CARD_COLORS[idx % CARD_COLORS.length];
+                return (
                 <div
                   key={profile.profile}
                   style={{
-                    background: "rgba(255, 255, 255, 0.03)",
+                    background: `${cardColor}11`,
                     borderRadius: "16px",
                     padding: "22px 26px",
+                    borderLeft: `4px solid ${cardColor}`,
                     animation: `fadeSlideIn 0.4s ease-out ${idx * 0.1}s both`,
                   }}
                 >
-                  <div style={{ fontSize: "1.4rem", fontWeight: 700, color: "#f30349", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "10px" }}>
+                  <div style={{ fontSize: "1.4rem", fontWeight: 700, color: cardColor, letterSpacing: "2px", textTransform: "uppercase", marginBottom: "10px" }}>
                     {profile.profile}
                   </div>
                   <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -261,13 +266,14 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
                           position: "relative",
                         }}
                       >
-                        <span style={{ position: "absolute", left: 0, color: "rgba(255,255,255,0.3)" }}>•</span>
+                        <span style={{ position: "absolute", left: 0, color: cardColor }}>•</span>
                         <span dangerouslySetInnerHTML={{ __html: highlightInsight(insight) }} />
                       </li>
                     ))}
                   </ul>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -314,18 +320,18 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
 // Highlight percentages and key words in red
 function highlightInsight(text: string): string {
   // Quoted text EERST (voordat er HTML met quotes wordt geïnjecteerd)
-  let result = text.replace(/"([^"]+)"/g, '<span style="color: #f30349; font-weight: 700;">"$1"</span>');
+  let result = text.replace(/"([^"]+)"/g, '<span style="color: white; font-weight: 700;">"$1"</span>');
   // Percentages
-  result = result.replace(/(\d+%)/g, '<span style="color: #f30349; font-weight: 700;">$1</span>');
+  result = result.replace(/(\d+%)/g, '<span style="color: white; font-weight: 700;">$1</span>');
   // Highlight region names
   const regions = ["Randstad", "Noord", "Zuid", "Oost"];
   regions.forEach(r => {
-    result = result.replace(new RegExp(`\\b${r}\\b`, "g"), `<span style="color: #f30349; font-weight: 700;">${r}</span>`);
+    result = result.replace(new RegExp(`\\b${r}\\b`, "g"), `<span style="color: white; font-weight: 700;">${r}</span>`);
   });
   // Highlight profile names
   const profiles = ["Management", "HR & Talent", "IT & Tech", "Marketing & Sales"];
   profiles.forEach(p => {
-    result = result.replace(new RegExp(p.replace(/[&]/g, '&amp;'), "g"), `<span style="color: #f30349; font-weight: 700;">${p}</span>`);
+    result = result.replace(new RegExp(p.replace(/[&]/g, '&amp;'), "g"), `<span style="color: white; font-weight: 700;">${p}</span>`);
   });
   return result;
 }
