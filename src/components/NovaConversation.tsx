@@ -133,7 +133,7 @@ function CheatSheetModal({ onClose }: { onClose: () => void }) {
             color="#ffffff"
             items={[
               { cmd: "Hoi Nova / Stel je voor", desc: "Nova stelt zichzelf voor" },
-              { cmd: "Vertel over Buzzmaster", desc: "Uitleg over het platform" },
+              { cmd: "Vertel over NOVA AI", desc: "Uitleg over het platform" },
               { cmd: "Ja / Top / Doen", desc: "Bevestig een voorstel" },
               { cmd: "Nee / Anders", desc: "Nova maakt een nieuw voorstel" },
               { cmd: "Gewoon praten", desc: "Nova is proactief, je hoeft geen exacte woorden te gebruiken" },
