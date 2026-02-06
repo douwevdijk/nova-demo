@@ -126,7 +126,7 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
         {/* REGIONS MODE: Netherlands Map - full width, no stats sidebar */}
         {mode === "regions" && (
           <div>
-            <div style={{ position: "relative", width: "100%", aspectRatio: "580 / 616" }}>
+            <div style={{ position: "relative", width: "100%", maxWidth: "560px", aspectRatio: "580 / 616", margin: "0 auto" }}>
               {/* Netherlands SVG - visible outlines */}
               <img
                 src="/netherlands.svg"
