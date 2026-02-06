@@ -28,6 +28,183 @@ import { QuestionManager, type QuestionDisplayData, type PollResultItem as QMPol
 
 type ActiveModal = "none" | "poll" | "polldeep-regions" | "polldeep-profiles" | "websearch" | "openvraag" | "openvraagdeep" | "summary" | "image" | "seats";
 
+// Cheat Sheet flow section helper
+function FlowSection({ title, color, items }: {
+  title: string;
+  color: string;
+  items: { step?: string; cmd: string; desc: string }[];
+}) {
+  const alpha = (a: number) => {
+    const m = color.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+    if (!m) return color;
+    return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${a})`;
+  };
+  return (
+    <div style={{ background: alpha(0.06), border: `1px solid ${alpha(0.18)}`, borderRadius: "16px", padding: "28px" }}>
+      <div style={{ fontSize: "0.9rem", fontWeight: 700, color, letterSpacing: "2px", textTransform: "uppercase", marginBottom: "20px" }}>
+        {title}
+      </div>
+      {items.map((item, i) => (
+        <div key={i} style={{ display: "flex", gap: "14px", alignItems: "baseline", marginBottom: "14px" }}>
+          <span style={{ color: alpha(0.45), fontSize: "1rem", fontWeight: 700, flexShrink: 0, minWidth: "16px" }}>
+            {item.step || "\u2022"}
+          </span>
+          <div>
+            <span style={{ color: "white", fontSize: "1.25rem", fontWeight: 600 }}>&ldquo;{item.cmd}&rdquo;</span>
+            <span style={{ color: "rgba(255, 255, 255, 0.4)", fontSize: "1.1rem", marginLeft: "10px" }}>{item.desc}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Cheat Sheet Modal Component
+function CheatSheetModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0, 0, 0, 0.85)",
+        backdropFilter: "blur(12px)",
+        animation: "fadeInSetup 0.25s ease",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "94vw",
+          maxWidth: "1400px",
+          maxHeight: "90vh",
+          overflowY: "auto",
+          background: "rgba(8, 8, 12, 0.99)",
+          border: "1px solid rgba(25, 89, 105, 0.25)",
+          borderRadius: "24px",
+          padding: "48px 56px",
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "40px" }}>
+          <div>
+            <h2 style={{ color: "white", fontSize: "2.4rem", fontWeight: 700, margin: 0 }}>
+              Nova Commando&apos;s
+            </h2>
+            <p style={{ color: "rgba(255, 255, 255, 0.4)", fontSize: "1.2rem", margin: "8px 0 0" }}>
+              Praat gewoon tegen Nova — zij regelt de rest
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "50%",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
+              background: "transparent",
+              color: "rgba(255, 255, 255, 0.5)",
+              fontSize: "24px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            &times;
+          </button>
+        </div>
+
+        {/* Flow sections grid */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))",
+          gap: "24px",
+        }}>
+
+          {/* ALGEMEEN */}
+          <FlowSection
+            title="Algemeen"
+            color="#ffffff"
+            items={[
+              { cmd: "Hoi Nova / Stel je voor", desc: "Nova stelt zichzelf voor" },
+              { cmd: "Vertel over Buzzmaster", desc: "Uitleg over het platform" },
+              { cmd: "Ja / Top / Doen", desc: "Bevestig een voorstel" },
+              { cmd: "Nee / Anders", desc: "Nova maakt een nieuw voorstel" },
+              { cmd: "Gewoon praten", desc: "Nova is proactief, je hoeft geen exacte woorden te gebruiken" },
+              { cmd: "Doorvragen na resultaten", desc: "Na elke poll of open vraag: inzoomen, samenvatten, of plaatje maken" },
+            ]}
+          />
+
+          {/* POLLS */}
+          <FlowSection
+            title="Polls"
+            color="#f30349"
+            items={[
+              { step: "1", cmd: "Maak een poll over...", desc: "Nova stelt een poll voor" },
+              { step: "2", cmd: "Bevestig of wijzig", desc: "Pas opties aan of keur goed" },
+              { step: "3", cmd: "Toon resultaten", desc: "Staafdiagram met percentages" },
+              { step: "4", cmd: "Zoom in / Per regio", desc: "Kaart van Nederland" },
+              { step: "5", cmd: "Per profiel", desc: "Analyse per klantprofiel" },
+              { step: "6", cmd: "Zetelverdeling", desc: "Resultaten als parlement" },
+            ]}
+          />
+
+          {/* OPEN VRAGEN */}
+          <FlowSection
+            title="Open Vragen"
+            color="#195969"
+            items={[
+              { step: "1", cmd: "Stel een open vraag over...", desc: "Nova stelt een vraag voor" },
+              { step: "2", cmd: "Bevestig of wijzig", desc: "Pas aan of keur goed" },
+              { step: "3", cmd: "Toon resultaten", desc: "Antwoorden als kaartjes" },
+              { step: "4", cmd: "Zoom in / Deep dive", desc: "Per regio en profiel" },
+            ]}
+          />
+
+          {/* ANALYSE & CONTENT */}
+          <FlowSection
+            title="Analyse & Content"
+            color="#9333ea"
+            items={[
+              { cmd: "Vat samen / Conclusie", desc: "Samenvatting op scherm" },
+              { cmd: "Geef me 6 highlights", desc: "Kernpunten als lijst" },
+              { cmd: "Maak er een gedicht van", desc: "Creatieve content" },
+              { cmd: "Analyseer in 3 zinnen", desc: "Korte analyse op scherm" },
+            ]}
+          />
+
+          {/* AFBEELDINGEN */}
+          <FlowSection
+            title="Afbeeldingen"
+            color="#f59e0b"
+            items={[
+              { step: "1", cmd: "Maak een plaatje / Visualiseer", desc: "Genereert op achtergrond (~15 sec)" },
+              { step: "2", cmd: "Toon het plaatje", desc: "Toont op scherm" },
+            ]}
+          />
+
+          {/* INTERNET */}
+          <FlowSection
+            title="Internet Zoeken"
+            color="#10b981"
+            items={[
+              { step: "1", cmd: "Zoek op...", desc: "Nova zoekt het internet af" },
+              { step: "2", cmd: "Toon de resultaten", desc: "Zet op scherm" },
+            ]}
+          />
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 // Epic Nova Title Component with GSAP animations
 function NovaTitle() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -373,6 +550,7 @@ export function NovaConversation() {
   const [sessionBriefing, setSessionBriefing] = useState("");
   const [isPreparing, setIsPreparing] = useState(false);
   const [showQuestionMenu, setShowQuestionMenu] = useState(false);
+  const [showCheatSheet, setShowCheatSheet] = useState(false);
   const [firebaseQuestions, setFirebaseQuestions] = useState<PreparedQuestion[]>([]);
   const [activeQuestion, setActiveQuestion] = useState<PreparedQuestion | null>(null);
   const [activeQuestionResults, setActiveQuestionResults] = useState<{
@@ -764,14 +942,14 @@ export function NovaConversation() {
       if (activeQuestionResults?.votes) {
         notification += `HUIDIGE STEMMEN: ${JSON.stringify(activeQuestionResults.votes)}\n`;
       }
-      notification += `\nALS RENS VRAAGT OM DE VRAAG TE TONEN → TOON DEZE VRAAG, MAAK GEEN NIEUWE AAN!`;
+      notification += `\nALS RENS VRAAGT OM DEZE VRAAG TE TONEN → gebruik propose_poll met EXACT deze vraag. ALS RENS OM EEN ANDERE/NIEUWE VRAAG VRAAGT → maak gewoon een nieuwe.`;
     } else {
       notification += `TYPE: OPEN VRAAG\n`;
       notification += `VRAAG: "${activeQuestion.title}"\n`;
       if (activeQuestionResults?.answers) {
         notification += `HUIDIGE ANTWOORDEN: ${activeQuestionResults.answers.length} stuks\n`;
       }
-      notification += `\nALS RENS VRAAGT OM DE VRAAG TE TONEN → TOON DEZE VRAAG, MAAK GEEN NIEUWE AAN!`;
+      notification += `\nALS RENS VRAAGT OM DEZE VRAAG TE TONEN → gebruik propose_open_vraag met EXACT deze vraag. ALS RENS OM EEN ANDERE/NIEUWE VRAAG VRAAGT → maak gewoon een nieuwe.`;
     }
 
     clientRef.current.sendSilentConversationEvent(notification);
@@ -820,6 +998,7 @@ export function NovaConversation() {
   // Landing page
   if (!isConnected && !isConnecting) {
     return (
+    <>
       <div className="fixed inset-0 overflow-hidden" style={{ background: "#0a0a0a" }}>
         {/* Subtle radial background */}
         <div
@@ -847,33 +1026,6 @@ export function NovaConversation() {
 
         {/* Center content */}
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10" style={{ overflow: "hidden", padding: "40px 20px" }}>
-          {/* Logo - inverted to white, red shape stays */}
-          <div style={{ marginBottom: "6px", position: "relative" }}>
-            <svg style={{ position: "absolute", width: 0, height: 0 }}>
-              <defs>
-                <filter id="black-to-white">
-                  <feColorMatrix
-                    type="matrix"
-                    values="-1 0 0 0 1
-                            0 -1 0 0 1
-                            0 0 -1 0 1
-                            0 0 0 1 0"
-                  />
-                </filter>
-              </defs>
-            </svg>
-            <img
-              src="/logo.png"
-              alt="Buzzmaster"
-              style={{
-                width: "180px",
-                height: "auto",
-                objectFit: "contain",
-                filter: "url(#black-to-white)",
-              }}
-            />
-          </div>
-
           {/* NOVA AI - Epic animated title */}
           <NovaTitle />
 
@@ -1358,7 +1510,7 @@ export function NovaConversation() {
         </div>
 
         {/* Demo controls top right */}
-        <div className="absolute top-6 right-8 flex items-center gap-3">
+        <div className="absolute top-6 right-8 flex items-center gap-3 z-20">
           {/* LIVE Button - disabled during preparing or when questions generated but not confirmed */}
           {(() => {
             const liveDisabled = isPreparing || (generatedQuestions.length > 0 && !questionsConfirmed);
@@ -1395,6 +1547,36 @@ export function NovaConversation() {
               </button>
             );
           })()}
+          <button
+            onClick={() => setShowCheatSheet(prev => !prev)}
+            style={{
+              color: showCheatSheet ? "rgba(25, 89, 105, 0.9)" : "rgba(255, 255, 255, 0.25)",
+              fontSize: "10px",
+              fontWeight: 500,
+              letterSpacing: "2px",
+              textTransform: "uppercase",
+              padding: "8px 14px",
+              borderRadius: "16px",
+              border: `1px solid ${showCheatSheet ? "rgba(25, 89, 105, 0.4)" : "rgba(255, 255, 255, 0.12)"}`,
+              background: showCheatSheet ? "rgba(25, 89, 105, 0.1)" : "transparent",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+            }}
+            onMouseEnter={(e) => {
+              if (!showCheatSheet) {
+                e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)";
+                e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!showCheatSheet) {
+                e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)";
+                e.currentTarget.style.color = "rgba(255, 255, 255, 0.25)";
+              }
+            }}
+          >
+            Tips
+          </button>
           <button
             onClick={handleShowEmptyPoll}
             style={{
@@ -1541,6 +1723,10 @@ export function NovaConversation() {
           }
         `}</style>
       </div>
+
+      {/* Cheat Sheet Modal - shared, outside overflow-hidden */}
+      {showCheatSheet && <CheatSheetModal onClose={() => setShowCheatSheet(false)} />}
+    </>
     );
   }
 
@@ -1680,7 +1866,7 @@ export function NovaConversation() {
                 textTransform: "uppercase",
               }}
             >
-              Buzzmaster
+              Nova AI
             </span>
 
             <div className="flex items-center gap-3">
@@ -1729,6 +1915,37 @@ export function NovaConversation() {
                   )}
                 </button>
               )}
+
+              <button
+                onClick={() => { setShowCheatSheet(prev => !prev); setShowQuestionMenu(false); }}
+                style={{
+                  color: showCheatSheet ? "rgba(25, 89, 105, 0.9)" : "rgba(255, 255, 255, 0.25)",
+                  fontSize: "10px",
+                  fontWeight: 500,
+                  letterSpacing: "2px",
+                  textTransform: "uppercase",
+                  padding: "8px 14px",
+                  borderRadius: "16px",
+                  border: `1px solid ${showCheatSheet ? "rgba(25, 89, 105, 0.4)" : "rgba(255, 255, 255, 0.12)"}`,
+                  background: showCheatSheet ? "rgba(25, 89, 105, 0.1)" : "transparent",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (!showCheatSheet) {
+                    e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)";
+                    e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!showCheatSheet) {
+                    e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)";
+                    e.currentTarget.style.color = "rgba(255, 255, 255, 0.25)";
+                  }
+                }}
+              >
+                Tips
+              </button>
 
               <button
                 onClick={handleShowEmptyPoll}
@@ -1963,6 +2180,9 @@ export function NovaConversation() {
           </div>
         )}
       </div>
+
+      {/* Cheat Sheet Modal - outside pointer-events-none */}
+      {showCheatSheet && <CheatSheetModal onClose={() => setShowCheatSheet(false)} />}
 
       {/* Poll Display - only show when activeModal is poll */}
       {activeModal === "poll" && currentPoll && (

@@ -46,12 +46,14 @@ export interface ProfileBreakdown {
   profile: string;
   results: PollResultItem[];
   totalVotes: number;
+  keyInsights: string[];
 }
 
 export interface PollDeepDive {
   regions: RegionBreakdown[];
   profiles: ProfileBreakdown[];
   insights: string[];
+  overallProfileInsight: string;
 }
 
 export interface PollData {
@@ -666,10 +668,14 @@ export class RealtimeClient {
       seedVotes?: { option: string; count: number }[];
     };
 
-    // Check if QuestionManager has an active poll question — reuse as preview
+    // Check if QuestionManager has an active poll question — reuse only if same question
     if (this.config.questionManager) {
       const activeInfo = this.config.questionManager.getActiveQuestionInfo();
-      if (activeInfo.hasActiveQuestion && activeInfo.question?.type === "poll") {
+      if (
+        activeInfo.hasActiveQuestion &&
+        activeInfo.question?.type === "poll" &&
+        args.question.toLowerCase().trim() === activeInfo.question.title.toLowerCase().trim()
+      ) {
         console.log("[RealtimeClient] Using existing active poll question as preview:", activeInfo.question.id);
 
         this.config.questionManager.showQuestion();
@@ -787,14 +793,61 @@ export class RealtimeClient {
 
     // Generate profile breakdowns
     const profiles = ["Management", "HR & Talent", "IT & Tech", "Marketing & Sales"];
+    const profileCharacterInsights: Record<string, string[]> = {
+      "Management": [
+        "Focust op resultaat en impact",
+        "Denkt in strategie en richting",
+        "Wil concrete actie en voortgang",
+        "Stuurt op rendement en groei",
+        "Kiest vanuit organisatiebelang",
+      ],
+      "HR & Talent": [
+        "Denkt vanuit de mens",
+        "Focust op cultuur en groei",
+        "Kijkt naar betrokkenheid en welzijn",
+        "Weegt teamdynamiek mee",
+        "Wil draagvlak en verbinding",
+      ],
+      "IT & Tech": [
+        "Wil snelheid en tooling",
+        "Denkt in systemen en schaalbaarheid",
+        "Kijkt naar haalbaarheid en efficiency",
+        "Focust op data en automatisering",
+        "Wil technische onderbouwing",
+      ],
+      "Marketing & Sales": [
+        "Kijkt naar klantbeleving",
+        "Denkt commercieel en marktgericht",
+        "Focust op zichtbaarheid en bereik",
+        "Wil snelle resultaten en conversie",
+        "Kiest vanuit merkwaarde en positionering",
+      ],
+    };
+
     const profileBreakdowns: ProfileBreakdown[] = profiles.map(profile => {
       const profileVotes = this.randomCount(20, 60);
+      const profileResults = this.generateVotes(options, profileVotes);
+      const winner = profileResults[0];
+      const loser = profileResults[profileResults.length - 1];
+      const characterPool = profileCharacterInsights[profile] || [];
+      const characterInsight = characterPool[Math.floor(Math.random() * characterPool.length)];
+
+      const keyInsights = [
+        `Kiest voor "${winner.option}" (${winner.percentage}%)`,
+        `Wijst "${loser.option}" af (${loser.percentage}%)`,
+        characterInsight,
+      ];
+
       return {
         profile,
-        results: this.generateVotes(options, profileVotes),
+        results: profileResults,
         totalVotes: profileVotes,
+        keyInsights,
       };
     });
+
+    // Generate overall profile insight
+    const overallProfileInsight = this.generateOverallProfileInsight(profileBreakdowns);
 
     // Generate insights
     const topRegion = regionBreakdowns.reduce((best, r) => {
@@ -834,6 +887,7 @@ export class RealtimeClient {
         regions: regionBreakdowns,
         profiles: profileBreakdowns,
         insights,
+        overallProfileInsight,
       },
     };
   }
@@ -1031,10 +1085,14 @@ export class RealtimeClient {
       seedAnswers?: string[];
     };
 
-    // Check if QuestionManager has an active open question — reuse as preview
+    // Check if QuestionManager has an active open question — reuse only if same question
     if (this.config.questionManager) {
       const activeInfo = this.config.questionManager.getActiveQuestionInfo();
-      if (activeInfo.hasActiveQuestion && activeInfo.question?.type === "open") {
+      if (
+        activeInfo.hasActiveQuestion &&
+        activeInfo.question?.type === "open" &&
+        args.question.toLowerCase().trim() === activeInfo.question.title.toLowerCase().trim()
+      ) {
         console.log("[RealtimeClient] Using existing active open question as preview:", activeInfo.question.id);
 
         this.config.questionManager.showQuestion();
@@ -1300,6 +1358,57 @@ export class RealtimeClient {
       allWords: words,
       message: `${totalResponses} antwoorden binnen. Meest genoemd: ${topWords}`,
     });
+  }
+
+  // Generate a 2-sentence overall profile insight with variation
+  private generateOverallProfileInsight(profiles: ProfileBreakdown[]): string {
+    const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+
+    // Find profiles that agree and disagree
+    const winnerMap = new Map<string, string[]>();
+    profiles.forEach(p => {
+      const w = p.results[0].option;
+      if (!winnerMap.has(w)) winnerMap.set(w, []);
+      winnerMap.get(w)!.push(p.profile);
+    });
+
+    // Find the most "different" profile (unique winner or lowest agreement)
+    const mainWinner = profiles.reduce((best, p) =>
+      p.results[0].percentage > best.results[0].percentage ? p : best
+    );
+    const outlier = profiles.find(p => p.results[0].option !== mainWinner.results[0].option);
+
+    // Find max contrast pair
+    const sorted = [...profiles].sort((a, b) => b.results[0].percentage - a.results[0].percentage);
+    const strongest = sorted[0];
+    const weakest = sorted[sorted.length - 1];
+
+    const templates = [
+      () => {
+        if (outlier) {
+          return `${mainWinner.profile} en andere profielen kiezen voor "${mainWinner.results[0].option}", maar ${outlier.profile} wijkt af met "${outlier.results[0].option}". Het grootste contrast zit tussen ${strongest.profile} en ${weakest.profile}.`;
+        }
+        return `Alle profielen kiezen voor "${mainWinner.results[0].option}" — een breed gedragen voorkeur. Toch verschilt de overtuiging: ${strongest.profile} is het meest uitgesproken (${strongest.results[0].percentage}%), terwijl ${weakest.profile} verdeeld stemt.`;
+      },
+      () => {
+        const agreeing = winnerMap.get(mainWinner.results[0].option) || [];
+        if (agreeing.length >= 3) {
+          return `Een opvallende consensus: ${agreeing.length} van de 4 profielen kiezen "${mainWinner.results[0].option}" als favoriet. ${weakest.profile} springt eruit met de laagste score op de populairste keuze.`;
+        }
+        return `De meningen zijn verdeeld: ${strongest.profile} kiest overtuigend voor "${strongest.results[0].option}" (${strongest.results[0].percentage}%), terwijl ${weakest.profile} juist een andere richting kiest. Een interessant verschil in perspectief.`;
+      },
+      () => {
+        if (outlier) {
+          return `Waar ${strongest.profile} duidelijk kiest voor "${strongest.results[0].option}" (${strongest.results[0].percentage}%), gaat ${outlier.profile} een andere kant op met "${outlier.results[0].option}". Dat zegt iets over hoe elk profiel naar dit vraagstuk kijkt.`;
+        }
+        return `${strongest.profile} is het meest uitgesproken met ${strongest.results[0].percentage}% voor "${strongest.results[0].option}". ${weakest.profile} is het minst overtuigd — daar liggen de nuances.`;
+      },
+      () => {
+        return `${strongest.profile} scoort het hoogst op "${strongest.results[0].option}" (${strongest.results[0].percentage}%), terwijl ${weakest.profile} met ${weakest.results[0].percentage}% de meeste twijfel toont. Een duidelijk verschil in prioriteiten tussen deze groepen.`;
+      },
+    ];
+
+    return pick(templates)();
   }
 
   // Generate random count between min and max

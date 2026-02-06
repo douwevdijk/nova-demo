@@ -29,7 +29,6 @@ const REGION_COLORS: Record<string, string> = {
 export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepDiveDisplayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [visibleRegions, setVisibleRegions] = useState(0);
-  const [insightText, setInsightText] = useState("");
 
   useEffect(() => {
     if (data && containerRef.current) {
@@ -50,22 +49,6 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
         }, 400);
         return () => clearInterval(interval);
       }
-
-      if (mode === "profiles") {
-        // Type out insight
-        const insight = data.insights[0] || "";
-        let i = 0;
-        setInsightText("");
-        const interval = setInterval(() => {
-          if (i < insight.length) {
-            setInsightText(insight.slice(0, i + 1));
-            i++;
-          } else {
-            clearInterval(interval);
-          }
-        }, 20);
-        return () => clearInterval(interval);
-      }
     }
   }, [data, mode]);
 
@@ -77,20 +60,19 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
       style={{
         background: "rgba(5, 5, 5, 0.95)",
         backdropFilter: "blur(20px)",
-        padding: "60px 0",
+        padding: "24px",
       }}
     >
       <div
         ref={containerRef}
-        className="relative w-full max-w-5xl mx-auto"
+        className="relative w-full mx-auto"
         style={{
           background: "linear-gradient(145deg, #0d0d0d, #050505)",
           borderRadius: "16px",
-          border: "3px solid rgba(243, 3, 73, 0.4)",
-          padding: "44px 52px",
+          padding: "48px 64px",
           boxShadow: "0 50px 100px rgba(0, 0, 0, 0.8), 0 0 150px rgba(243, 3, 73, 0.1)",
           opacity: 0,
-          maxHeight: "calc(100vh - 120px)",
+          maxHeight: "calc(100vh - 48px)",
           overflowY: "auto",
         }}
         onClick={(e) => e.stopPropagation()}
@@ -127,7 +109,7 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
               color: "white",
               padding: "8px 24px",
               borderRadius: "9999px",
-              fontSize: "0.8rem",
+              fontSize: "1rem",
               fontWeight: 700,
               letterSpacing: "3px",
               display: "inline-block",
@@ -136,15 +118,15 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
           >
             {mode === "regions" ? "ANALYSE PER REGIO" : "ANALYSE PER PROFIEL"}
           </span>
-          <h2 style={{ color: "white", fontSize: "1.6rem", fontWeight: 700, lineHeight: 1.3 }}>
+          <h2 style={{ color: "white", fontSize: "2.2rem", fontWeight: 700, lineHeight: 1.3 }}>
             {question}
           </h2>
         </div>
 
         {/* REGIONS MODE: Netherlands Map - full width, no stats sidebar */}
         {mode === "regions" && (
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <div style={{ position: "relative", width: "500px", height: "560px" }}>
+          <div>
+            <div style={{ position: "relative", width: "100%", aspectRatio: "580 / 616" }}>
               {/* Netherlands SVG - visible outlines */}
               <img
                 src="/netherlands.svg"
@@ -153,8 +135,8 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
                   width: "100%",
                   height: "100%",
                   objectFit: "contain",
-                  opacity: 0.45,
-                  filter: "brightness(0.7) sepia(0.3) hue-rotate(160deg) saturate(2)",
+                  opacity: 1,
+                  filter: "brightness(1.1) saturate(2.5)",
                 }}
               />
 
@@ -232,87 +214,60 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
           </div>
         )}
 
-        {/* PROFILES MODE: Quote with highlights */}
+        {/* PROFILES MODE: Overall insight + bullet cards */}
         {mode === "profiles" && (
           <div>
-            {/* Profile cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "36px" }}>
-              {data.profiles.map((profile, idx) => {
-                const winner = profile.results[0];
-                const runnerUp = profile.results[1];
-
-                return (
-                  <div
-                    key={profile.profile}
-                    style={{
-                      background: "rgba(255, 255, 255, 0.03)",
-                      border: "1px solid rgba(255, 255, 255, 0.08)",
-                      borderRadius: "16px",
-                      padding: "32px",
-                      animation: `fadeSlideIn 0.4s ease-out ${idx * 0.1}s both`,
-                    }}
-                  >
-                    <div style={{ fontSize: "1rem", fontWeight: 600, color: "rgba(255,255,255,0.5)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "16px" }}>
-                      {profile.profile}
-                    </div>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: "10px", marginBottom: "12px" }}>
-                      <span style={{ fontSize: "2.8rem", fontWeight: 800, color: "#f30349" }}>{winner.percentage}%</span>
-                      <span style={{ fontSize: "1.25rem", color: "white", fontWeight: 600 }}>{winner.option}</span>
-                    </div>
-                    <div style={{ color: "rgba(255,255,255,0.45)", fontSize: "1.05rem" }}>
-                      Runner-up: {runnerUp.option} ({runnerUp.percentage}%) · {profile.totalVotes} stemmen
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Nova Insight Quote */}
-            <div
-              style={{
-                background: "rgba(243, 3, 73, 0.08)",
-                border: "2px solid rgba(243, 3, 73, 0.3)",
-                borderRadius: "16px",
-                padding: "32px 40px",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "20px" }}>
-                <div
-                  style={{
-                    width: "48px",
-                    height: "48px",
-                    background: "#f30349",
-                    borderRadius: "50%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "1.3rem",
-                    fontWeight: 900,
-                    color: "white",
-                    boxShadow: "0 0 30px rgba(243, 3, 73, 0.6)",
-                  }}
-                >
-                  N
-                </div>
-                <span style={{ color: "#f30349", fontSize: "0.95rem", fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase" }}>
-                  NOVA INSIGHT
-                </span>
-              </div>
+            {/* Overall profile insight */}
+            {data.overallProfileInsight && (
               <p
                 style={{
                   color: "white",
-                  fontSize: "1.5rem",
-                  fontWeight: 500,
-                  lineHeight: 1.7,
-                  margin: 0,
+                  fontSize: "2.2rem",
+                  fontWeight: 400,
+                  lineHeight: 1.6,
+                  marginBottom: "40px",
+                  opacity: 0.85,
                 }}
                 dangerouslySetInnerHTML={{
-                  __html: highlightInsight(insightText),
+                  __html: highlightInsight(data.overallProfileInsight),
                 }}
               />
-              {insightText.length < (data.insights[0]?.length || 0) && (
-                <span style={{ color: "#f30349", animation: "blink 0.8s infinite", fontSize: "1.5rem" }}>|</span>
-              )}
+            )}
+
+            {/* Profile cards with key insights */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "28px" }}>
+              {data.profiles.map((profile, idx) => (
+                <div
+                  key={profile.profile}
+                  style={{
+                    background: "rgba(255, 255, 255, 0.03)",
+                    borderRadius: "16px",
+                    padding: "36px 40px",
+                    animation: `fadeSlideIn 0.4s ease-out ${idx * 0.1}s both`,
+                  }}
+                >
+                  <div style={{ fontSize: "1.6rem", fontWeight: 700, color: "#f30349", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "20px" }}>
+                    {profile.profile}
+                  </div>
+                  <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "16px" }}>
+                    {profile.keyInsights.map((insight, i) => (
+                      <li
+                        key={i}
+                        style={{
+                          color: "rgba(255, 255, 255, 0.85)",
+                          fontSize: "1.8rem",
+                          lineHeight: 1.5,
+                          paddingLeft: "24px",
+                          position: "relative",
+                        }}
+                      >
+                        <span style={{ position: "absolute", left: 0, color: "rgba(255,255,255,0.3)" }}>•</span>
+                        <span dangerouslySetInnerHTML={{ __html: highlightInsight(insight) }} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -329,7 +284,6 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
           }}
         >
           <span style={{ color: "rgba(255, 255, 255, 0.2)", fontSize: "0.7rem", letterSpacing: "3px", textTransform: "uppercase" }}>
-            Powered by Buzzmaster
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#22c55e", boxShadow: "0 0 10px #22c55e" }} />
@@ -352,10 +306,6 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
           0% { transform: translate(-50%, -50%) scale(1); opacity: 0.4; }
           100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
         }
-        @keyframes blink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0; }
-        }
       `}</style>
     </div>
   );
@@ -363,10 +313,10 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
 
 // Highlight percentages and key words in red
 function highlightInsight(text: string): string {
-  // Highlight percentages
-  let result = text.replace(/(\d+%)/g, '<span style="color: #f30349; font-weight: 700;">$1</span>');
-  // Highlight quoted text
-  result = result.replace(/"([^"]+)"/g, '<span style="color: #f30349; font-weight: 700;">"$1"</span>');
+  // Quoted text EERST (voordat er HTML met quotes wordt geïnjecteerd)
+  let result = text.replace(/"([^"]+)"/g, '<span style="color: #f30349; font-weight: 700;">"$1"</span>');
+  // Percentages
+  result = result.replace(/(\d+%)/g, '<span style="color: #f30349; font-weight: 700;">$1</span>');
   // Highlight region names
   const regions = ["Randstad", "Noord", "Zuid", "Oost"];
   regions.forEach(r => {

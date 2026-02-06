@@ -159,12 +159,13 @@ export function OpenVraagDisplay({ openVraag, onClose }: OpenVraagDisplayProps) 
           </div>
           <h1
             style={{
-              fontSize: "3rem",
+              fontSize: "4.5rem",
               fontWeight: 700,
               color: "white",
               textAlign: "center",
-              maxWidth: "900px",
+              maxWidth: "1100px",
               lineHeight: 1.2,
+              overflowWrap: "break-word",
             }}
           >
             {openVraag.question}
@@ -255,11 +256,12 @@ export function OpenVraagDisplay({ openVraag, onClose }: OpenVraagDisplayProps) 
             </div>
             <h2
               style={{
-                fontSize: "2.2rem",
+                fontSize: "3.5rem",
                 fontWeight: 700,
                 color: "rgba(255, 255, 255, 0.9)",
-                maxWidth: "900px",
+                maxWidth: "1100px",
                 lineHeight: 1.2,
+                overflowWrap: "break-word",
               }}
             >
               {openVraag.question}
@@ -270,7 +272,7 @@ export function OpenVraagDisplay({ openVraag, onClose }: OpenVraagDisplayProps) 
           <div
             style={{
               position: "absolute",
-              top: "200px",
+              top: "280px",
               left: "0",
               right: "0",
               bottom: "80px",

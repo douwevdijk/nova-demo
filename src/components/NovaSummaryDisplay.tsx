@@ -260,7 +260,6 @@ export function NovaSummaryDisplay({ data, onClose }: NovaSummaryDisplayProps) {
           }}
         >
           <span style={{ color: "rgba(255, 255, 255, 0.2)", fontSize: "0.7rem", letterSpacing: "3px", textTransform: "uppercase" }}>
-            Powered by Buzzmaster
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#22c55e", boxShadow: "0 0 10px #22c55e" }} />

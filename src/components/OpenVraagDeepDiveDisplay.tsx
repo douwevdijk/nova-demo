@@ -57,20 +57,20 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
       style={{
         background: "rgba(5, 5, 5, 0.95)",
         backdropFilter: "blur(20px)",
-        padding: "60px 0",
+        padding: "24px",
       }}
     >
       <div
         ref={containerRef}
-        className="relative w-full max-w-5xl mx-auto"
+        className="relative w-full mx-auto"
         style={{
           background: "linear-gradient(145deg, #0d0d0d, #050505)",
           borderRadius: "16px",
           border: "3px solid rgba(243, 3, 73, 0.4)",
-          padding: "44px 52px",
+          padding: "48px 64px",
           boxShadow: "0 50px 100px rgba(0, 0, 0, 0.8), 0 0 150px rgba(243, 3, 73, 0.1)",
           opacity: 0,
-          maxHeight: "calc(100vh - 120px)",
+          maxHeight: "calc(100vh - 48px)",
           overflowY: "auto",
         }}
         onClick={(e) => e.stopPropagation()}
@@ -105,7 +105,7 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
               color: "white",
               padding: "10px 28px",
               borderRadius: "9999px",
-              fontSize: "0.9rem",
+              fontSize: "1.1rem",
               fontWeight: 700,
               letterSpacing: "3px",
               display: "inline-block",
@@ -114,7 +114,7 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
           >
             DEEP DIVE - OPEN VRAAG
           </span>
-          <h2 style={{ color: "white", fontSize: "1.8rem", fontWeight: 700, lineHeight: 1.3 }}>
+          <h2 style={{ color: "white", fontSize: "2.4rem", fontWeight: 700, lineHeight: 1.3 }}>
             {question}
           </h2>
         </div>
@@ -123,7 +123,7 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
         <div style={{ marginBottom: "36px" }}>
           <h3 style={{
             color: "rgba(255, 255, 255, 0.5)",
-            fontSize: "0.9rem",
+            fontSize: "1.1rem",
             fontWeight: 700,
             letterSpacing: "3px",
             textTransform: "uppercase",
@@ -131,7 +131,7 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
           }}>
             Per Regio
           </h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "28px" }}>
             {data.byRegion.map((region, idx) => {
               if (idx >= visibleSections) return null;
               const color = REGION_COLORS[region.region] || "#f30349";
@@ -142,7 +142,7 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
                     background: "rgba(255, 255, 255, 0.03)",
                     border: `1px solid ${color}44`,
                     borderRadius: "16px",
-                    padding: "28px 32px",
+                    padding: "36px 40px",
                     animation: "fadeSlideIn 0.4s ease-out both",
                   }}
                 >
@@ -154,7 +154,7 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
                       background: color,
                       boxShadow: `0 0 16px ${color}`,
                     }} />
-                    <span style={{ color, fontSize: "1.15rem", fontWeight: 700, letterSpacing: "1px" }}>
+                    <span style={{ color, fontSize: "1.5rem", fontWeight: 700, letterSpacing: "1px" }}>
                       {region.region}
                     </span>
                   </div>
@@ -169,7 +169,7 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
                     }}>
                       <span style={{
                         color: i === 0 ? color : "rgba(255, 255, 255, 0.6)",
-                        fontSize: i === 0 ? "1.15rem" : "1rem",
+                        fontSize: i === 0 ? "1.5rem" : "1.3rem",
                         fontWeight: i === 0 ? 700 : 500,
                         flex: 1,
                       }}>
@@ -177,7 +177,7 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
                       </span>
                       <span style={{
                         color: i === 0 ? color : "rgba(255, 255, 255, 0.35)",
-                        fontSize: "0.95rem",
+                        fontSize: "1.2rem",
                         fontWeight: 600,
                         fontVariantNumeric: "tabular-nums",
                       }}>
@@ -192,7 +192,7 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
                     paddingTop: "14px",
                     borderTop: `1px solid ${color}22`,
                     color: "rgba(255, 255, 255, 0.45)",
-                    fontSize: "0.95rem",
+                    fontSize: "1.15rem",
                     fontStyle: "italic",
                     lineHeight: 1.6,
                   }}>
@@ -211,7 +211,7 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
         <div style={{ marginBottom: "20px" }}>
           <h3 style={{
             color: "rgba(255, 255, 255, 0.5)",
-            fontSize: "0.9rem",
+            fontSize: "1.1rem",
             fontWeight: 700,
             letterSpacing: "3px",
             textTransform: "uppercase",
@@ -219,7 +219,7 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
           }}>
             Per Klantprofiel
           </h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "28px" }}>
             {data.byProfile.map((profile, idx) => {
               const sectionIdx = data.byRegion.length + idx;
               if (sectionIdx >= visibleSections) return null;
@@ -231,21 +231,21 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
                     background: "rgba(255, 255, 255, 0.03)",
                     border: "1px solid rgba(255, 255, 255, 0.08)",
                     borderRadius: "16px",
-                    padding: "28px 32px",
+                    padding: "36px 40px",
                     animation: "fadeSlideIn 0.4s ease-out both",
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "18px" }}>
                     <div style={{
-                      width: "36px",
-                      height: "36px",
+                      width: "44px",
+                      height: "44px",
                       borderRadius: "10px",
                       background: "rgba(243, 3, 73, 0.15)",
                       border: "1px solid rgba(243, 3, 73, 0.3)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: "0.8rem",
+                      fontSize: "1rem",
                       fontWeight: 800,
                       color: "#f30349",
                     }}>
@@ -253,7 +253,7 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
                     </div>
                     <span style={{
                       color: "rgba(255, 255, 255, 0.85)",
-                      fontSize: "1.1rem",
+                      fontSize: "1.5rem",
                       fontWeight: 600,
                       letterSpacing: "1px",
                     }}>
@@ -271,7 +271,7 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
                   }}>
                     <span style={{
                       color: "#f30349",
-                      fontSize: "1.15rem",
+                      fontSize: "1.5rem",
                       fontWeight: 700,
                     }}>
                       &quot;{profile.topAnswers[0].text}&quot;
@@ -279,7 +279,7 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
                     <span style={{
                       marginLeft: "10px",
                       color: "rgba(243, 3, 73, 0.6)",
-                      fontSize: "0.95rem",
+                      fontSize: "1.2rem",
                       fontWeight: 600,
                     }}>
                       {profile.topAnswers[0].count}x
@@ -297,13 +297,13 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
                     }}>
                       <span style={{
                         color: "rgba(255, 255, 255, 0.6)",
-                        fontSize: "1rem",
+                        fontSize: "1.3rem",
                       }}>
                         {answer.text}
                       </span>
                       <span style={{
                         color: "rgba(255, 255, 255, 0.3)",
-                        fontSize: "0.9rem",
+                        fontSize: "1.15rem",
                         fontVariantNumeric: "tabular-nums",
                       }}>
                         {answer.count}x
@@ -317,7 +317,7 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
                     paddingTop: "14px",
                     borderTop: "1px solid rgba(255, 255, 255, 0.05)",
                     color: "rgba(255, 255, 255, 0.45)",
-                    fontSize: "0.95rem",
+                    fontSize: "1.15rem",
                     fontStyle: "italic",
                     lineHeight: 1.6,
                   }}>
@@ -344,7 +344,6 @@ export function OpenVraagDeepDiveDisplay({ data, question, onClose }: OpenVraagD
           }}
         >
           <span style={{ color: "rgba(255, 255, 255, 0.2)", fontSize: "0.7rem", letterSpacing: "3px", textTransform: "uppercase" }}>
-            Powered by Buzzmaster
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#22c55e", boxShadow: "0 0 10px #22c55e" }} />

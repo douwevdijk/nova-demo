@@ -110,11 +110,8 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
 
       // Animate each bar with elastic bounce
       poll.results.forEach((result, i) => {
-        const maxPercent = Math.max(...poll.results!.map((r) => r.percentage));
-        const normalizedHeight = (result.percentage / maxPercent) * 100;
-
         gsap.to(bars[i], {
-          height: `${normalizedHeight}%`,
+          height: `${result.percentage}%`,
           duration: 1.4,
           delay: 0.4 + i * 0.12,
           ease: "elastic.out(1, 0.4)",
@@ -209,49 +206,54 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center z-50"
+      className="fixed inset-0 z-50"
       style={{
-        background: "rgba(5, 5, 5, 0.92)",
-        backdropFilter: "blur(20px)",
+        background: "radial-gradient(ellipse at 50% 40%, #0a0a14 0%, #000000 100%)",
       }}
-      onClick={handleClose}
     >
       <div
         ref={containerRef}
-        className="relative w-full max-w-7xl mx-8"
         style={{
-          background: "linear-gradient(145deg, #0d0d0d, #050505)",
-          borderRadius: "16px",
-          border: "3px solid rgba(25, 89, 105, 0.4)",
-          padding: "64px 72px",
-          boxShadow: `
-            0 50px 100px rgba(0, 0, 0, 0.8),
-            0 0 150px rgba(25, 89, 105, 0.1),
-            inset 0 1px 0 rgba(255, 255, 255, 0.03)
-          `,
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          padding: "48px 80px",
           opacity: 0,
         }}
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Close button */}
         <button
           onClick={handleClose}
           style={{
             position: "absolute",
-            top: "20px",
-            right: "24px",
-            color: "rgba(255, 255, 255, 0.2)",
-            background: "none",
-            border: "none",
-            fontSize: "36px",
+            top: "24px",
+            right: "32px",
+            width: "44px",
+            height: "44px",
+            borderRadius: "50%",
+            border: "1px solid rgba(255, 255, 255, 0.15)",
+            background: "rgba(0, 0, 0, 0.5)",
+            color: "rgba(255, 255, 255, 0.6)",
+            fontSize: "22px",
             cursor: "pointer",
-            transition: "color 0.2s",
-            lineHeight: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "all 0.2s ease",
+            zIndex: 100,
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255, 255, 255, 0.2)")}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = "rgba(243, 3, 73, 0.5)";
+            e.currentTarget.style.color = "#f30349";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.15)";
+            e.currentTarget.style.color = "rgba(255, 255, 255, 0.6)";
+          }}
         >
-          ×
+          x
         </button>
 
         {/* Header */}
@@ -306,8 +308,8 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
               display: "flex",
               justifyContent: "center",
               alignItems: "flex-end",
-              gap: "48px",
-              height: "520px",
+              gap: "40px",
+              height: "600px",
               padding: "0 20px",
             }}
           >
@@ -321,7 +323,7 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
-                    width: "140px",
+                    width: "220px",
                   }}
                 >
                   {/* Percentage */}
@@ -329,11 +331,11 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
                     className="bar-percent"
                     style={{
                       color: "white",
-                      fontSize: "2.2rem",
+                      fontSize: "3rem",
                       fontWeight: 800,
                       fontVariantNumeric: "tabular-nums",
                       marginBottom: "16px",
-                      height: "40px",
+                      height: "50px",
                     }}
                   >
                     0%
@@ -342,10 +344,10 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
                   {/* Bar container */}
                   <div
                     style={{
-                      width: "110px",
-                      height: "400px",
+                      width: "180px",
+                      height: "470px",
                       background: "rgba(255, 255, 255, 0.06)",
-                      borderRadius: "12px 12px 0 0",
+                      borderRadius: "16px 16px 0 0",
                       position: "relative",
                       display: "flex",
                       alignItems: "flex-end",
@@ -358,7 +360,7 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
                         width: "100%",
                         height: "0%",
                         background: color.bg,
-                        borderRadius: "12px 12px 0 0",
+                        borderRadius: "16px 16px 0 0",
                         boxShadow: `0 0 25px ${color.glow}`,
                       }}
                     />
@@ -368,15 +370,17 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
                   <span
                     style={{
                       color: "white",
-                      fontSize: "1.2rem",
-                      fontWeight: 500,
+                      fontSize: "1.6rem",
+                      fontWeight: 600,
                       textAlign: "center",
                       marginTop: "24px",
                       marginBottom: "16px",
-                      minHeight: "32px",
+                      height: "70px",
                       display: "flex",
-                      alignItems: "center",
+                      alignItems: "flex-start",
                       justifyContent: "center",
+                      overflowWrap: "break-word",
+                      overflow: "hidden",
                     }}
                   >
                     {result.option}
@@ -392,9 +396,7 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: "16px",
-              maxWidth: "700px",
-              margin: "0 auto",
+              gap: "20px",
             }}
           >
             {poll.options.map((option, index) => (
@@ -404,25 +406,25 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "20px",
+                  gap: "28px",
                   background: "rgba(255, 255, 255, 0.03)",
                   border: "2px solid rgba(255, 255, 255, 0.08)",
-                  borderRadius: "16px",
-                  padding: "20px 28px",
+                  borderRadius: "20px",
+                  padding: "28px 36px",
                   opacity: 0,
                 }}
               >
                 {/* Letter badge with RED glow */}
                 <span
                   style={{
-                    width: "48px",
-                    height: "48px",
+                    width: "64px",
+                    height: "64px",
                     background: "#f30349",
                     borderRadius: "50%",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: "1.1rem",
+                    fontSize: "1.4rem",
                     fontWeight: 700,
                     color: "white",
                     flexShrink: 0,
@@ -436,8 +438,8 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
                 <span
                   style={{
                     color: "rgba(255, 255, 255, 0.9)",
-                    fontSize: "1.25rem",
-                    fontWeight: 500,
+                    fontSize: "2rem",
+                    fontWeight: 600,
                   }}
                 >
                   {option}
@@ -528,7 +530,6 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
         {/* Footer */}
         <div
           className="mt-10 pt-6 flex items-center justify-between"
-          style={{ borderTop: "1px solid rgba(255, 255, 255, 0.05)" }}
         >
           <span
             style={{
@@ -538,7 +539,6 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
               textTransform: "uppercase",
             }}
           >
-            Powered by Buzzmaster
           </span>
 
           <div className="flex items-center gap-4">
