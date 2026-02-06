@@ -235,29 +235,29 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
             )}
 
             {/* Profile cards with key insights */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "28px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
               {data.profiles.map((profile, idx) => (
                 <div
                   key={profile.profile}
                   style={{
                     background: "rgba(255, 255, 255, 0.03)",
                     borderRadius: "16px",
-                    padding: "36px 40px",
+                    padding: "22px 26px",
                     animation: `fadeSlideIn 0.4s ease-out ${idx * 0.1}s both`,
                   }}
                 >
-                  <div style={{ fontSize: "1.6rem", fontWeight: 700, color: "#f30349", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "20px" }}>
+                  <div style={{ fontSize: "1.4rem", fontWeight: 700, color: "#f30349", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "10px" }}>
                     {profile.profile}
                   </div>
-                  <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "16px" }}>
+                  <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
                     {profile.keyInsights.map((insight, i) => (
                       <li
                         key={i}
                         style={{
                           color: "rgba(255, 255, 255, 0.85)",
-                          fontSize: "1.8rem",
-                          lineHeight: 1.5,
-                          paddingLeft: "24px",
+                          fontSize: "1.2rem",
+                          lineHeight: 1.4,
+                          paddingLeft: "20px",
                           position: "relative",
                         }}
                       >
