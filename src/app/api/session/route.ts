@@ -44,10 +44,6 @@ Gebruik deze context om je antwoorden, vragen en analyses relevant te maken voor
           instructions,
           audio: {
             input: {
-              // Input audio transcription (moved from top-level in GA)
-              transcription: {
-                model: "whisper-1",
-              },
               // Noise reduction for cleaner audio input
               noise_reduction: {
                 type: "near_field",
@@ -64,6 +60,12 @@ Gebruik deze context om je antwoorden, vragen en analyses relevant te maken voor
           // Function calling tools
           tools: NOVA_TOOLS,
           tool_choice: "auto",
+          // Truncate 20% extra headroom when context fills up,
+          // reducing frequency of cache busts
+          truncation: {
+            type: "retention_ratio",
+            retention_ratio: 0.6,
+          },
         },
       }),
     });

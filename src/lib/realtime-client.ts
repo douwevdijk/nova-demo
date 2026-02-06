@@ -156,6 +156,9 @@ export class RealtimeClient {
   private activeResponseId: string | null = null;
   private pendingResponseCreate: (() => void)[] = [];
 
+  // Timeout for ICE disconnected → error transition
+  private disconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
   // Pending proposal awaiting confirmation from Rens
   private pendingProposal: {
     type: "poll" | "open_vraag";
@@ -216,6 +219,48 @@ export class RealtimeClient {
 
       // Create peer connection
       this.peerConnection = new RTCPeerConnection();
+
+      // Monitor connection health
+      this.peerConnection.onconnectionstatechange = () => {
+        const state = this.peerConnection?.connectionState;
+        console.log("[WebRTC] connectionState:", state);
+        switch (state) {
+          case "connected":
+            this.clearDisconnectTimeout();
+            this.setConnectionState("connected");
+            break;
+          case "disconnected":
+            // ICE may recover — give it 5 seconds
+            this.startDisconnectTimeout();
+            break;
+          case "failed":
+          case "closed":
+            this.clearDisconnectTimeout();
+            this.setConnectionState("error");
+            this.config.onError("Verbinding met Nova verloren");
+            break;
+        }
+      };
+
+      this.peerConnection.oniceconnectionstatechange = () => {
+        const state = this.peerConnection?.iceConnectionState;
+        console.log("[WebRTC] iceConnectionState:", state);
+        switch (state) {
+          case "connected":
+          case "completed":
+            this.clearDisconnectTimeout();
+            this.setConnectionState("connected");
+            break;
+          case "disconnected":
+            this.startDisconnectTimeout();
+            break;
+          case "failed":
+            this.clearDisconnectTimeout();
+            this.setConnectionState("error");
+            this.config.onError("Verbinding met Nova verloren");
+            break;
+        }
+      };
 
       // Add local audio track
       const audioTrack = this.localStream.getAudioTracks()[0];
@@ -465,6 +510,8 @@ export class RealtimeClient {
       // Response finished - check for function calls
       case "response.done": {
         console.log("Response done", event);
+        // Log context usage
+        this.logContextUsage(event);
         // Check if response contains function calls BEFORE clearing activeResponseId
         // so that sendFunctionResult knows to wait
         const hasFunctionCalls = this.responseHasFunctionCalls(event);
@@ -519,6 +566,26 @@ export class RealtimeClient {
     }
   }
 
+  private startDisconnectTimeout(): void {
+    if (this.disconnectTimeoutId) return; // already running
+    this.disconnectTimeoutId = setTimeout(() => {
+      this.disconnectTimeoutId = null;
+      // If still not recovered, transition to error
+      const pcState = this.peerConnection?.connectionState;
+      if (pcState === "disconnected" || pcState === "failed") {
+        this.setConnectionState("error");
+        this.config.onError("Verbinding met Nova verloren");
+      }
+    }, 5000);
+  }
+
+  private clearDisconnectTimeout(): void {
+    if (this.disconnectTimeoutId) {
+      clearTimeout(this.disconnectTimeoutId);
+      this.disconnectTimeoutId = null;
+    }
+  }
+
   private responseHasFunctionCalls(event: Record<string, unknown>): boolean {
     const response = event.response as Record<string, unknown> | undefined;
     if (!response) return false;
@@ -542,6 +609,42 @@ export class RealtimeClient {
         console.log("Function call in response.done (already handled):", item.name);
       }
     }
+  }
+
+  private logContextUsage(event: Record<string, unknown>): void {
+    const response = event.response as Record<string, unknown> | undefined;
+    if (!response) return;
+
+    const usage = response.usage as Record<string, unknown> | undefined;
+    if (!usage) return;
+
+    const totalTokens = (usage.total_tokens as number) || 0;
+    const inputTokens = (usage.input_tokens as number) || 0;
+    const outputTokens = (usage.output_tokens as number) || 0;
+    const details = (usage.input_token_details as Record<string, number>) || {};
+    const cachedTokens = details.cached_tokens || 0;
+    const textTokens = details.text_tokens || 0;
+    const audioTokens = details.audio_tokens || 0;
+
+    const maxTokens = 28000; // Effective context budget (~32k minus output reserve)
+    const ratio = Math.min(totalTokens / maxTokens, 1);
+    const percent = Math.round(ratio * 100);
+
+    // Visual progress bar
+    const barLen = 20;
+    const filled = Math.round(ratio * barLen);
+    const bar = "━".repeat(filled) + "░".repeat(barLen - filled);
+
+    // Cache ratio
+    const cacheRatio = inputTokens > 0 ? Math.round((cachedTokens / inputTokens) * 100) : 0;
+    const cacheIcon = cacheRatio > 70 ? "✓" : cacheRatio > 40 ? "~" : "⚠️";
+
+    console.log(
+      `[Context] ${bar} ${percent}% | ${totalTokens.toLocaleString()}/${maxTokens.toLocaleString()} tokens | cache: ${cacheRatio}% ${cacheIcon}`
+    );
+    console.log(
+      `[Context]   ↳ input: ${inputTokens.toLocaleString()} (text: ${textTokens.toLocaleString()}, audio: ${audioTokens.toLocaleString()}, cached: ${cachedTokens.toLocaleString()}) | output: ${outputTokens.toLocaleString()}`
+    );
   }
 
   private safeParseArgs(argsJson: string): Record<string, unknown> {
@@ -920,26 +1023,17 @@ export class RealtimeClient {
       return `${p.profile} (${p.totalVotes} stemmen): #1 "${top.option}" ${top.percentage}%`;
     }).join(" | ");
 
+    // Compact return: UI already has full data via onPollDeepDiveRegions/Profiles callbacks
     if (mode === "regions") {
       return JSON.stringify({
         success: true,
-        question: this.currentPoll.question,
-        mode: "regions",
-        regionAnalysis: regionSummaries,
-        regions: deepDive.regions,
-        insights: deepDive.insights.filter(i => i.includes("regio") || i.includes("Randstad") || i.includes("Noord") || i.includes("Zuid") || i.includes("Oost")),
-        message: `Regio-analyse voor "${this.currentPoll.question}". ${regionSummaries}. ${deepDive.insights[0]}`,
+        message: `Regio-analyse: ${regionSummaries}. ${deepDive.insights[0]}`,
       });
     }
 
     return JSON.stringify({
       success: true,
-      question: this.currentPoll.question,
-      mode: "profiles",
-      profileAnalysis: profileSummaries,
-      profiles: deepDive.profiles,
-      insights: deepDive.insights.filter(i => i.includes("profiel") || i.includes("Management") || i.includes("HR") || i.includes("IT") || i.includes("Marketing")),
-      message: `Profiel-analyse voor "${this.currentPoll.question}". ${profileSummaries}. ${deepDive.insights[1]}`,
+      message: `Profiel-analyse: ${profileSummaries}. ${deepDive.insights[1]}`,
     });
   }
 
@@ -994,17 +1088,12 @@ export class RealtimeClient {
           this.config.onPollResults(this.currentPoll);
         }
 
-        const summary = results.map(r => `"${r.option}": ${r.votes} (${r.percentage}%)`).join(", ");
+        // Compact return: UI already has full data via onPollResults callback
+        const summary = results.map(r => `"${r.option}": ${r.percentage}%`).join(", ");
 
         return JSON.stringify({
           success: true,
-          question: activeData.question.title,
-          results,
-          totalVotes,
-          winner: winner.option,
-          winnerPercentage: winner.percentage,
-          summary,
-          message: `${totalVotes} stemmen. "${winner.option}" wint met ${winner.percentage}%.`,
+          message: `${totalVotes} stemmen. "${winner.option}" wint met ${winner.percentage}%. ${summary}`,
         });
       }
     }
@@ -1026,15 +1115,10 @@ export class RealtimeClient {
       this.config.onPollResults(this.currentPoll);
     }
 
+    // Compact return: UI already has full data via onPollResults callback
     return JSON.stringify({
       success: true,
-      question: this.currentPoll.question,
-      results: this.pendingPollResults.results,
-      totalVotes: this.pendingPollResults.totalVotes,
-      winner: this.pendingPollResults.winner,
-      winnerPercentage: this.pendingPollResults.winnerPercentage,
-      summary: this.pendingPollResults.summary,
-      message: `${this.pendingPollResults.totalVotes} stemmen. "${this.pendingPollResults.winner}" wint met ${this.pendingPollResults.winnerPercentage}%.`,
+      message: `${this.pendingPollResults.totalVotes} stemmen. "${this.pendingPollResults.winner}" wint met ${this.pendingPollResults.winnerPercentage}%. ${this.pendingPollResults.summary}`,
     });
   }
 
@@ -1194,15 +1278,10 @@ export class RealtimeClient {
         this.config.onPollResults(this.currentPoll);
       }
 
+      // Compact return: UI already has full data via onPollResults callback
       return JSON.stringify({
         success: true,
-        message: `Poll is live! ${this.pendingPollResults.totalVotes} stemmen. "${this.pendingPollResults.winner}" wint met ${this.pendingPollResults.winnerPercentage}%.`,
-        question: proposal.question,
-        results: this.pendingPollResults.results,
-        totalVotes: this.pendingPollResults.totalVotes,
-        winner: this.pendingPollResults.winner,
-        winnerPercentage: this.pendingPollResults.winnerPercentage,
-        summary: this.pendingPollResults.summary,
+        message: `Poll is live! ${this.pendingPollResults.totalVotes} stemmen. "${this.pendingPollResults.winner}" wint met ${this.pendingPollResults.winnerPercentage}%. Resultaten worden getoond.`,
       });
     }
 
@@ -1244,16 +1323,13 @@ export class RealtimeClient {
         this.config.onOpenVraagResults(this.currentOpenVraag);
       }
 
-      const topWords = words.slice(0, 10).map(w => `${w.text} (${w.count}x)`).join(", ");
+      const topWords = words.slice(0, 5).map(w => w.text).join(", ");
       const totalResponses = words.reduce((sum, w) => sum + w.count, 0);
 
+      // Compact return: UI already has full data via onOpenVraagResults callback
       return JSON.stringify({
         success: true,
-        message: `Open vraag is live! ${totalResponses} antwoorden. Meest genoemd: ${topWords}`,
-        question: proposal.question,
-        totalResponses,
-        topWords,
-        allWords: words,
+        message: `Open vraag is live! ${totalResponses} antwoorden. Top 5: ${topWords}. Resultaten worden getoond.`,
       });
     }
 
@@ -1318,16 +1394,13 @@ export class RealtimeClient {
           this.config.onOpenVraagResults(this.currentOpenVraag);
         }
 
-        const topWords = words.slice(0, 10).map(w => `${w.text} (${w.count}x)`).join(", ");
+        const topWords = words.slice(0, 5).map(w => `${w.text} (${w.count}x)`).join(", ");
         const totalResponses = words.reduce((sum, w) => sum + w.count, 0);
 
+        // Compact return: UI already has full data via onOpenVraagResults callback
         return JSON.stringify({
           success: true,
-          question: activeData.question.title,
-          totalResponses,
-          topWords,
-          allWords: words,
-          message: `${totalResponses} antwoorden binnen. Meest genoemd: ${topWords}`,
+          message: `${totalResponses} antwoorden. Top 5: ${topWords}`,
         });
       }
     }
@@ -1348,17 +1421,13 @@ export class RealtimeClient {
       this.config.onOpenVraagResults(this.currentOpenVraag);
     }
 
-    // Return words in result so AI remembers them
-    const topWords = words.slice(0, 10).map(w => `${w.text} (${w.count}x)`).join(", ");
+    // Compact return: UI already has full data via onOpenVraagResults callback
+    const topWords = words.slice(0, 5).map(w => `${w.text} (${w.count}x)`).join(", ");
     const totalResponses = words.reduce((sum, w) => sum + w.count, 0);
 
     return JSON.stringify({
       success: true,
-      question: this.currentOpenVraag.question,
-      totalResponses,
-      topWords,
-      allWords: words,
-      message: `${totalResponses} antwoorden binnen. Meest genoemd: ${topWords}`,
+      message: `${totalResponses} antwoorden. Top 5: ${topWords}`,
     });
   }
 
@@ -1793,16 +1862,12 @@ export class RealtimeClient {
       this.config.onOpenVraagDeepDive({ deepDive, question });
     }
 
-    // Build summary for AI memory
-    const cardSummary = deepDive.keyCards.map(c =>
-      `${c.title}: ${c.bullets.join("; ")}`
-    ).join("\n");
+    // Compact return: UI already has full data via onOpenVraagDeepDive callback
+    const cardTitles = deepDive.keyCards.map(c => c.title).join(", ");
 
     return JSON.stringify({
       success: true,
-      question,
-      message: `Deep dive voor open vraag "${question}".\n\nOverall: ${deepDive.overallInsight}\n\nKey insights:\n${cardSummary}`,
-      deepDive,
+      message: `Deep dive "${question}": ${deepDive.overallInsight} Thema's: ${cardTitles}.`,
     });
   }
 
@@ -1930,6 +1995,9 @@ export class RealtimeClient {
       return;
     }
 
+    // Log payload size for context monitoring
+    console.log(`[Context] → ${functionName || "unknown"}: ${result.length} chars teruggestuurd naar Nova`);
+
     // Send conversation item with function output
     const conversationItem = {
       type: "conversation.item.create",
@@ -2032,6 +2100,8 @@ export class RealtimeClient {
   }
 
   disconnect(): void {
+    this.clearDisconnectTimeout();
+
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
     }

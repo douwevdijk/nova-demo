@@ -974,15 +974,6 @@ export function NovaConversation() {
     setShowVisualizer(false);
   }, []);
 
-  // Demo: show empty poll (options only, no results)
-  const handleShowEmptyPoll = useCallback(() => {
-    const emptyPoll: PollData = {
-      question: "Hoe vaak gebruik je AI in je werk?",
-      options: ["Dagelijks", "Wekelijks", "Maandelijks", "Zelden", "Nooit"],
-    };
-    setActiveModal("poll");
-    setCurrentPoll(emptyPoll);
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -994,9 +985,10 @@ export function NovaConversation() {
 
   const isConnected = connectionState === "connected";
   const isConnecting = connectionState === "connecting";
+  const isError = connectionState === "error";
 
-  // Landing page
-  if (!isConnected && !isConnecting) {
+  // Landing page — only show when truly disconnected (not on error during session)
+  if (!isConnected && !isConnecting && !isError) {
     return (
     <>
       <div className="fixed inset-0 overflow-hidden" style={{ background: "#0a0a0a" }}>
@@ -1511,42 +1503,32 @@ export function NovaConversation() {
 
         {/* Demo controls top right */}
         <div className="absolute top-6 right-8 flex items-center gap-3 z-20">
-          {/* LIVE Button - disabled during preparing or when questions generated but not confirmed */}
-          {(() => {
-            const liveDisabled = isPreparing || (generatedQuestions.length > 0 && !questionsConfirmed);
-            return (
-              <button
-                disabled={liveDisabled}
-                onClick={() => {
-                  if (liveDisabled) return;
-                  setShowVoteLink(!showVoteLink);
-                }}
-                style={{
-                  color: liveDisabled
-                    ? "rgba(255, 255, 255, 0.15)"
-                    : showVoteLink ? "#f30349" : "rgba(243, 3, 73, 0.6)",
-                  fontSize: "10px",
-                  fontWeight: 600,
-                  letterSpacing: "2px",
-                  textTransform: "uppercase",
-                  padding: "8px 14px",
-                  borderRadius: "16px",
-                  border: `1px solid ${liveDisabled
-                    ? "rgba(255, 255, 255, 0.08)"
-                    : showVoteLink ? "rgba(243, 3, 73, 0.5)" : "rgba(243, 3, 73, 0.25)"}`,
-                  background: liveDisabled
-                    ? "rgba(255, 255, 255, 0.02)"
-                    : showVoteLink ? "rgba(243, 3, 73, 0.1)" : "transparent",
-                  cursor: liveDisabled ? "not-allowed" : "pointer",
-                  transition: "all 0.2s ease",
-                  opacity: liveDisabled ? 0.5 : 1,
-                  pointerEvents: liveDisabled ? "none" : "auto",
-                }}
-              >
-                Live
-              </button>
-            );
-          })()}
+          <button
+            onClick={() => setShowVoteLink(!showVoteLink)}
+            style={{
+              color: "rgba(255, 255, 255, 0.25)",
+              fontSize: "10px",
+              fontWeight: 600,
+              letterSpacing: "2px",
+              textTransform: "uppercase",
+              padding: "8px 14px",
+              borderRadius: "16px",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              background: "transparent",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)";
+              e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)";
+              e.currentTarget.style.color = "rgba(255, 255, 255, 0.25)";
+            }}
+          >
+            Live
+          </button>
           <button
             onClick={() => setShowCheatSheet(prev => !prev)}
             style={{
@@ -1576,32 +1558,6 @@ export function NovaConversation() {
             }}
           >
             Tips
-          </button>
-          <button
-            onClick={handleShowEmptyPoll}
-            style={{
-              color: "rgba(255, 255, 255, 0.25)",
-              fontSize: "10px",
-              fontWeight: 500,
-              letterSpacing: "2px",
-              textTransform: "uppercase",
-              padding: "8px 14px",
-              borderRadius: "16px",
-              border: "1px solid rgba(255, 255, 255, 0.12)",
-              background: "transparent",
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)";
-              e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)";
-              e.currentTarget.style.color = "rgba(255, 255, 255, 0.25)";
-            }}
-          >
-            Demo
           </button>
         </div>
 
@@ -1720,6 +1676,14 @@ export function NovaConversation() {
           @keyframes dotBlink {
             0%, 20% { opacity: 0; }
             40%, 100% { opacity: 1; }
+          }
+          @keyframes livePulse {
+            0%, 100% { border-color: rgba(34, 197, 94, 0.25); }
+            50% { border-color: rgba(34, 197, 94, 0.6); }
+          }
+          @keyframes liveBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
           }
         `}</style>
       </div>
@@ -1870,6 +1834,36 @@ export function NovaConversation() {
             </span>
 
             <div className="flex items-center gap-3">
+              {/* LIVE button — connection status indicator */}
+              <button
+                onClick={() => setShowVoteLink(!showVoteLink)}
+                style={{
+                  color: isError ? "#f30349"
+                    : isConnecting ? "#f59e0b"
+                    : "#22c55e",
+                  fontSize: "10px",
+                  fontWeight: 600,
+                  letterSpacing: "2px",
+                  textTransform: "uppercase",
+                  padding: "8px 14px",
+                  borderRadius: "16px",
+                  border: `1px solid ${
+                    isError ? "rgba(243, 3, 73, 0.5)"
+                    : isConnecting ? "rgba(245, 158, 11, 0.4)"
+                    : "rgba(34, 197, 94, 0.4)"}`,
+                  background: isError ? "rgba(243, 3, 73, 0.1)"
+                    : isConnecting ? "rgba(245, 158, 11, 0.08)"
+                    : "rgba(34, 197, 94, 0.08)",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  animation: isConnected ? "livePulse 2s ease-in-out infinite"
+                    : isConnecting ? "liveBlink 1s ease-in-out infinite"
+                    : "none",
+                }}
+              >
+                {isError ? "Offline" : isConnecting ? "Connecting..." : "Live"}
+              </button>
+
               {firebaseQuestions.length > 0 && (
                 <button
                   onClick={() => setShowQuestionMenu(prev => !prev)}
@@ -1945,33 +1939,6 @@ export function NovaConversation() {
                 }}
               >
                 Tips
-              </button>
-
-              <button
-                onClick={handleShowEmptyPoll}
-                style={{
-                  color: "rgba(255, 255, 255, 0.25)",
-                  fontSize: "10px",
-                  fontWeight: 500,
-                  letterSpacing: "2px",
-                  textTransform: "uppercase",
-                  padding: "8px 14px",
-                  borderRadius: "16px",
-                  border: "1px solid rgba(255, 255, 255, 0.12)",
-                  background: "transparent",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)";
-                  e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)";
-                  e.currentTarget.style.color = "rgba(255, 255, 255, 0.25)";
-                }}
-              >
-                Demo
               </button>
 
               <button
@@ -2514,6 +2481,14 @@ export function NovaConversation() {
         @keyframes searchReadyPulse {
           0%, 100% { box-shadow: 0 0 60px rgba(25, 89, 105, 0.25), 0 8px 32px rgba(0, 0, 0, 0.5); }
           50% { box-shadow: 0 0 80px rgba(25, 89, 105, 0.4), 0 8px 32px rgba(0, 0, 0, 0.5); }
+        }
+        @keyframes livePulse {
+          0%, 100% { border-color: rgba(34, 197, 94, 0.25); }
+          50% { border-color: rgba(34, 197, 94, 0.6); }
+        }
+        @keyframes liveBlink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
         }
       `}</style>
     </div>
