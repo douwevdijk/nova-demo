@@ -496,6 +496,13 @@ export class RealtimeClient {
           console.log("Function call arguments done:", pending.name, callId);
           this.pendingFunctionCalls.delete(itemId);
 
+          // Skip truncated/empty args (happens when user interrupts mid-stream)
+          const parsed = this.safeParseArgs(args);
+          if (Object.keys(parsed).length === 0) {
+            console.warn("Skipping function call with empty/truncated args:", pending.name);
+            break;
+          }
+
           // Execute the function
           const functionCall: FunctionCall = {
             name: pending.name,
@@ -676,7 +683,7 @@ export class RealtimeClient {
       try {
         return JSON.parse(fixed);
       } catch {
-        console.error("Could not fix truncated JSON:", argsJson);
+        console.warn("Could not fix truncated JSON:", argsJson);
         return {};
       }
     }
