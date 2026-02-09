@@ -1502,29 +1502,29 @@ export function NovaConversation() {
         </div>
 
         {/* Demo controls top right */}
-        <div className="absolute top-6 right-8 flex items-center gap-3 z-20">
+        <div className="absolute top-6 right-8 flex items-center gap-3 z-30">
           <button
             onClick={() => setShowQuestionMenu(prev => !prev)}
             style={{
-              color: "rgba(255, 255, 255, 0.25)",
+              color: "rgba(255, 255, 255, 0.5)",
               fontSize: "10px",
               fontWeight: 600,
               letterSpacing: "2px",
               textTransform: "uppercase",
               padding: "8px 14px",
               borderRadius: "16px",
-              border: "1px solid rgba(255, 255, 255, 0.12)",
-              background: "transparent",
+              border: "1px solid rgba(255, 255, 255, 0.25)",
+              background: "rgba(255, 255, 255, 0.05)",
               cursor: "pointer",
               transition: "all 0.2s ease",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)";
-              e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)";
+              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.4)";
+              e.currentTarget.style.color = "rgba(255, 255, 255, 0.8)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)";
-              e.currentTarget.style.color = "rgba(255, 255, 255, 0.25)";
+              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)";
+              e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)";
             }}
           >
             Live
@@ -1532,28 +1532,28 @@ export function NovaConversation() {
           <button
             onClick={() => setShowCheatSheet(prev => !prev)}
             style={{
-              color: showCheatSheet ? "rgba(25, 89, 105, 0.9)" : "rgba(255, 255, 255, 0.25)",
+              color: showCheatSheet ? "rgba(25, 89, 105, 0.9)" : "rgba(255, 255, 255, 0.5)",
               fontSize: "10px",
               fontWeight: 500,
               letterSpacing: "2px",
               textTransform: "uppercase",
               padding: "8px 14px",
               borderRadius: "16px",
-              border: `1px solid ${showCheatSheet ? "rgba(25, 89, 105, 0.4)" : "rgba(255, 255, 255, 0.12)"}`,
-              background: showCheatSheet ? "rgba(25, 89, 105, 0.1)" : "transparent",
+              border: `1px solid ${showCheatSheet ? "rgba(25, 89, 105, 0.4)" : "rgba(255, 255, 255, 0.25)"}`,
+              background: showCheatSheet ? "rgba(25, 89, 105, 0.1)" : "rgba(255, 255, 255, 0.05)",
               cursor: "pointer",
               transition: "all 0.2s ease",
             }}
             onMouseEnter={(e) => {
               if (!showCheatSheet) {
-                e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)";
-                e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)";
+                e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.4)";
+                e.currentTarget.style.color = "rgba(255, 255, 255, 0.8)";
               }
             }}
             onMouseLeave={(e) => {
               if (!showCheatSheet) {
-                e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)";
-                e.currentTarget.style.color = "rgba(255, 255, 255, 0.25)";
+                e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)";
+                e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)";
               }
             }}
           >
@@ -1562,25 +1562,25 @@ export function NovaConversation() {
           <button
             onClick={() => setShowQrCode(true)}
             style={{
-              color: "rgba(255, 255, 255, 0.25)",
+              color: "rgba(255, 255, 255, 0.5)",
               fontSize: "10px",
               fontWeight: 500,
               letterSpacing: "2px",
               textTransform: "uppercase",
               padding: "8px 14px",
               borderRadius: "16px",
-              border: "1px solid rgba(255, 255, 255, 0.12)",
-              background: "transparent",
+              border: "1px solid rgba(255, 255, 255, 0.25)",
+              background: "rgba(255, 255, 255, 0.05)",
               cursor: "pointer",
               transition: "all 0.2s ease",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)";
-              e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)";
+              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.4)";
+              e.currentTarget.style.color = "rgba(255, 255, 255, 0.8)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)";
-              e.currentTarget.style.color = "rgba(255, 255, 255, 0.25)";
+              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)";
+              e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)";
             }}
           >
             QR Code
