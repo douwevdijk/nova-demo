@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
+import sharp from "sharp";
 
 const MODEL_NAME = "gemini-3-pro-image-preview";
 
@@ -58,14 +59,23 @@ export async function POST(request: NextRequest) {
     let imageUrl = "";
     let textResponse = "";
 
+    let rawBase64Data = "";
     for (const part of parts) {
       if (part.inlineData) {
-        const mimeType = part.inlineData.mimeType || "image/png";
-        imageUrl = `data:${mimeType};base64,${part.inlineData.data}`;
+        rawBase64Data = part.inlineData.data || "";
       }
       if (part.text) {
         textResponse = part.text;
       }
+    }
+
+    if (rawBase64Data) {
+      const inputBuffer = Buffer.from(rawBase64Data, "base64");
+      const compressedBuffer = await sharp(inputBuffer)
+        .resize(1024, 1024, { fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 85 })
+        .toBuffer();
+      imageUrl = `data:image/jpeg;base64,${compressedBuffer.toString("base64")}`;
     }
 
     if (!imageUrl) {
