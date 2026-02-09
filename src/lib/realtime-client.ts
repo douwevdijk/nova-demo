@@ -165,7 +165,6 @@ export class RealtimeClient {
     question: string;
     options?: string[];
     seedVotes?: { option: string; count: number }[];
-    seedAnswers?: string[];
   } | null = null;
 
   // Current question tracking for Firebase
@@ -705,7 +704,7 @@ export class RealtimeClient {
           result = this.executeProposeOpenVraag(call.arguments);
           break;
         case "confirm_question":
-          result = await this.executeConfirmQuestion();
+          result = await this.executeConfirmQuestion(call.arguments);
           break;
         case "get_poll_results":
           result = await this.executeGetPollResults();
@@ -1168,7 +1167,6 @@ export class RealtimeClient {
   private executeProposeOpenVraag(argsJson: string): string {
     const args = this.safeParseArgs(argsJson) as {
       question: string;
-      seedAnswers?: string[];
     };
 
     // Check if QuestionManager has an active open question — reuse only if same question
@@ -1191,7 +1189,6 @@ export class RealtimeClient {
         this.pendingProposal = {
           type: "open_vraag",
           question: activeInfo.question.title,
-          seedAnswers: args.seedAnswers,
         };
 
         return JSON.stringify({
@@ -1208,7 +1205,6 @@ export class RealtimeClient {
     this.pendingProposal = {
       type: "open_vraag",
       question: args.question,
-      seedAnswers: args.seedAnswers,
     };
 
     const openVraagData: OpenVraagData = {
@@ -1231,10 +1227,13 @@ export class RealtimeClient {
     });
   }
 
-  private async executeConfirmQuestion(): Promise<string> {
+  private async executeConfirmQuestion(argsJson?: string): Promise<string> {
     if (!this.pendingProposal) {
       return JSON.stringify({ error: "Geen voorstel om te bevestigen. Maak eerst een voorstel met propose_poll of propose_open_vraag." });
     }
+
+    // Parse optional args (seedAnswers for open vragen)
+    const confirmArgs = argsJson ? this.safeParseArgs(argsJson) as { seedAnswers?: string[] } : {};
 
     // Grab and clear immediately to prevent double-confirm
     const proposal = this.pendingProposal;
@@ -1289,7 +1288,7 @@ export class RealtimeClient {
       const questionId = `open_${Date.now()}`;
       this.currentQuestionId = questionId;
 
-      const seedAnswers = proposal.seedAnswers || this.generateLocalSeedAnswers(proposal.question);
+      const seedAnswers = confirmArgs.seedAnswers || this.generateLocalSeedAnswers(proposal.question);
 
       try {
         // 1. Create question in Firebase
@@ -1329,13 +1328,10 @@ export class RealtimeClient {
         this.config.onOpenVraagResults(this.currentOpenVraag);
       }
 
-      const topWords = words.slice(0, 5).map(w => w.text).join(", ");
-      const totalResponses = words.reduce((sum, w) => sum + w.count, 0);
-
-      // Compact return: UI already has full data via onOpenVraagResults callback
+      const listing = words.map(w => `${w.name}: "${w.text}"`).join("; ");
       return JSON.stringify({
         success: true,
-        message: `Open vraag is live! ${totalResponses} antwoorden. Top 5: ${topWords}. Resultaten worden getoond.`,
+        message: `Open vraag live! ${words.length} reacties. Antwoorden: ${listing}. Bespreek wat opvalt — GEEN tools aanroepen, gewoon praten.`,
       });
     }
 
@@ -1354,87 +1350,57 @@ export class RealtimeClient {
   }
 
   private async executeGetOpenVraagResults(): Promise<string> {
-    // Try to get results from QuestionManager (via listener, always up-to-date)
-    if (this.config.questionManager) {
-      const activeData = this.config.questionManager.getActiveQuestionWithResults();
+    // Bepaal actieve open vraag
+    const activeData = this.config.questionManager?.getActiveQuestionWithResults();
+    const questionId = activeData?.question?.type === "open" ? activeData.question.id : this.currentQuestionId;
+    const questionTitle = activeData?.question?.title || this.currentOpenVraag?.question;
+    const campaignId = this.config.questionManager?.campaignId || this.config.campaignId;
 
-      // Check if we have an active open question
-      if (activeData && activeData.question.type === "open") {
-        // If no answers yet, return early with message (prevents double call)
-        if (!activeData.answers || activeData.answers.length === 0) {
-          return JSON.stringify({
-            success: false,
-            message: "Er zijn nog geen antwoorden binnen. Wacht even tot er gereageerd is!",
-          });
-        }
-
-        // We have answers, continue with results
-        // Convert answers to OpenAnswer format with counts
-        const answerCounts: Record<string, { count: number; name?: string }> = {};
-        activeData.answers.forEach(a => {
-          if (!answerCounts[a.text]) {
-            answerCounts[a.text] = { count: 0, name: a.name };
-          }
-          answerCounts[a.text].count++;
-        });
-
-        const words: OpenAnswer[] = Object.entries(answerCounts).map(([text, data]) => ({
-          text,
-          count: data.count,
-          name: data.name || "Anoniem",
-        }));
-
-        // Sort by count descending
-        words.sort((a, b) => b.count - a.count);
-
-        // Update currentOpenVraag for UI
-        this.currentOpenVraag = {
-          question: activeData.question.title,
-          showResults: true,
-          words,
-          deepDive: this.currentOpenVraag?.deepDive,
-        };
-        this.currentQuestionId = activeData.question.id;
-
-        // Notify UI to show results
-        if (this.config.onOpenVraagResults) {
-          this.config.onOpenVraagResults(this.currentOpenVraag);
-        }
-
-        const topWords = words.slice(0, 5).map(w => `${w.text} (${w.count}x)`).join(", ");
-        const totalResponses = words.reduce((sum, w) => sum + w.count, 0);
-
-        // Compact return: UI already has full data via onOpenVraagResults callback
-        return JSON.stringify({
-          success: true,
-          message: `${totalResponses} antwoorden. Top 5: ${topWords}`,
-        });
-      }
-    }
-
-    // Fallback: check if we have currentOpenVraag from earlier
-    if (!this.currentOpenVraag) {
+    if (!questionId || !campaignId) {
       return JSON.stringify({ error: "Geen actieve open vraag gevonden" });
     }
 
-    // Fallback to locally generated words
-    const words = this.currentOpenVraag.words || [];
-    console.log("[OpenVraag] Using locally generated words as fallback");
+    // Eenmalige read uit Firebase — geen live listener, geen jumps
+    const results = await getResults(campaignId, questionId);
+    const answers: { text: string; name: string }[] = [];
+    Object.values(results).forEach((answer: unknown) => {
+      const a = answer as { answer?: string; userName?: string };
+      if (a.answer) {
+        answers.push({ text: a.answer, name: a.userName || "Anoniem" });
+      }
+    });
 
-    // Update open vraag with results
-    this.currentOpenVraag.showResults = true;
+    if (answers.length === 0) {
+      return JSON.stringify({
+        success: false,
+        message: "Er zijn nog geen antwoorden binnen. Wacht even tot er gereageerd is!",
+      });
+    }
+
+    // Alle antwoorden als losse items — geen groepering, geen counting
+    const words: OpenAnswer[] = answers.map(a => ({
+      text: a.text,
+      count: 1,
+      name: a.name,
+    }));
+
+    // Update UI
+    this.currentOpenVraag = {
+      question: questionTitle || "",
+      showResults: true,
+      words,
+      deepDive: this.currentOpenVraag?.deepDive,
+    };
+    this.currentQuestionId = questionId;
 
     if (this.config.onOpenVraagResults) {
       this.config.onOpenVraagResults(this.currentOpenVraag);
     }
 
-    // Compact return: UI already has full data via onOpenVraagResults callback
-    const topWords = words.slice(0, 5).map(w => `${w.text} (${w.count}x)`).join(", ");
-    const totalResponses = words.reduce((sum, w) => sum + w.count, 0);
-
+    const listing = answers.map(a => `${a.name}: "${a.text}"`).join("; ");
     return JSON.stringify({
       success: true,
-      message: `${totalResponses} antwoorden. Top 5: ${topWords}`,
+      message: `${answers.length} antwoorden: ${listing}`,
     });
   }
 
@@ -1883,53 +1849,63 @@ export class RealtimeClient {
     const regions = ["Randstad", "Noord", "Zuid", "Oost"];
     const profiles = ["Management", "HR & Talent", "IT & Tech", "Marketing & Sales"];
 
-    const byRegion = regions.map(region => {
-      // Pick 3 random answers with random counts
+    // Shuffle all answers once and deal them evenly across regions (like cards)
+    // so every answer appears in at least one region
+    const byRegion = (() => {
       const shuffled = [...answers].sort(() => Math.random() - 0.5);
-      const topAnswers = shuffled.slice(0, 3).map(a => ({
-        ...a,
-        count: this.randomCount(8, 35),
-        region,
-      }));
-      topAnswers.sort((a, b) => b.count - a.count);
+      const perGroup = Math.ceil(shuffled.length / regions.length);
+      return regions.map((region, i) => {
+        const groupAnswers = shuffled.slice(i * perGroup, (i + 1) * perGroup);
+        const topAnswers = groupAnswers.map(a => ({
+          ...a,
+          count: this.randomCount(8, 35),
+          region,
+        }));
+        topAnswers.sort((a, b) => b.count - a.count);
 
-      const top = topAnswers[0];
-      return {
-        region,
-        topAnswers,
-        insight: `In ${region} is "${top.text}" het meest genoemd (${top.count}x). ${
-          region === "Randstad" ? "De Randstad focust sterk op tempo en efficiëntie." :
-          region === "Noord" ? "In het Noorden zien we meer nadruk op samenwerking." :
-          region === "Zuid" ? "Zuid-Nederland legt de nadruk op menselijk contact." :
-          "Het Oosten hecht veel waarde aan stabiliteit en groei."
-        }`,
-      };
-    });
+        const top = topAnswers[0];
+        return {
+          region,
+          topAnswers,
+          insight: `In ${region} is "${top.text}" het meest genoemd (${top.count}x). ${
+            region === "Randstad" ? "De Randstad focust sterk op tempo en efficiëntie." :
+            region === "Noord" ? "In het Noorden zien we meer nadruk op samenwerking." :
+            region === "Zuid" ? "Zuid-Nederland legt de nadruk op menselijk contact." :
+            "Het Oosten hecht veel waarde aan stabiliteit en groei."
+          }`,
+        };
+      });
+    })();
 
-    const byProfile = profiles.map(profile => {
+    // Same shuffle+deal approach for profiles
+    const byProfile = (() => {
       const shuffled = [...answers].sort(() => Math.random() - 0.5);
-      const topAnswers = shuffled.slice(0, 3).map(a => ({
-        ...a,
-        count: this.randomCount(6, 30),
-        profile,
-      }));
-      topAnswers.sort((a, b) => b.count - a.count);
+      const perGroup = Math.ceil(shuffled.length / profiles.length);
+      return profiles.map((profile, i) => {
+        const groupAnswers = shuffled.slice(i * perGroup, (i + 1) * perGroup);
+        const topAnswers = groupAnswers.map(a => ({
+          ...a,
+          count: this.randomCount(6, 30),
+          profile,
+        }));
+        topAnswers.sort((a, b) => b.count - a.count);
 
-      const top = topAnswers[0];
-      return {
-        profile,
-        topAnswers,
-        insight: `${profile} noemt "${top.text}" het vaakst (${top.count}x). ${
-          profile === "Management" ? "Management denkt vooral in impact en resultaat." :
-          profile === "HR & Talent" ? "HR focust op mensen, cultuur en ontwikkeling." :
-          profile === "IT & Tech" ? "IT & Tech wil snelheid, tools en automatisering." :
-          "Marketing & Sales kijkt naar klantbeleving en creativiteit."
-        }`,
-      };
-    });
+        const top = topAnswers[0];
+        return {
+          profile,
+          topAnswers,
+          insight: `${profile} noemt "${top.text}" het vaakst (${top.count}x). ${
+            profile === "Management" ? "Management denkt vooral in impact en resultaat." :
+            profile === "HR & Talent" ? "HR focust op mensen, cultuur en ontwikkeling." :
+            profile === "IT & Tech" ? "IT & Tech wil snelheid, tools en automatisering." :
+            "Marketing & Sales kijkt naar klantbeleving en creativiteit."
+          }`,
+        };
+      });
+    })();
 
-    // Generate combined overall insight
-    const topOverall = [...answers].sort(() => Math.random() - 0.5).slice(0, 3);
+    // Use top answers from regions for coherent overall insight (no new random picks)
+    const topOverall = byRegion.map(r => r.topAnswers[0]);
     const overallInsight = `"${topOverall[0].text}" is veruit het meest genoemde thema (${this.randomCount(25, 45)}%), gevolgd door "${topOverall[1].text}" en "${topOverall[2].text}". Opvallend: de Randstad focust op tempo, terwijl het Noorden juist samenwerking benadrukt. Management en IT & Tech zijn het hier grotendeels over eens.`;
 
     // Generate 4 key cards combining region + profile insights
@@ -1976,10 +1952,15 @@ export class RealtimeClient {
       if (!this.dataChannel || this.dataChannel.readyState !== "open") return;
 
       // Custom instructions voor results functies
-      if (functionName === "get_poll_results" || functionName === "get_wordcloud_results") {
-        const instructions = functionName === "get_wordcloud_results"
-          ? "Bespreek ALLEEN antwoorden die in de data staan — verzin NIETS. Benoem thema's en patronen, geen ranking. Trek een korte conclusie. Maak het levendig!"
-          : "ZOOM IN op deze resultaten! Wat valt op? Wat is verrassend? Vergelijk de uitkomsten. Lees niet de percentages op, maar trek meteen een pakkende conclusie ( benoem niet specifiek dat je een conclusie trekt ). Maak het spannend!";
+      if (functionName === "get_poll_results" || functionName === "get_wordcloud_results" || functionName === "confirm_question") {
+        let instructions: string;
+        if (functionName === "get_wordcloud_results") {
+          instructions = "Bespreek ALLEEN antwoorden die in de data staan — verzin NIETS. Lees NIET elk antwoord op. Benoem thema's en patronen, noem hooguit 2-3 opvallende antwoorden bij naam. Trek een korte conclusie. Maak het levendig!";
+        } else if (functionName === "confirm_question") {
+          instructions = "Je hebt de data teruggekregen. PRAAT erover — noem 2-3 opvallende antwoorden bij naam, spot thema's, trek een conclusie. Roep GEEN andere tools aan. Gewoon praten!";
+        } else {
+          instructions = "ZOOM IN op deze resultaten! Wat valt op? Wat is verrassend? Vergelijk de uitkomsten. Lees niet de percentages op, maar trek meteen een pakkende conclusie ( benoem niet specifiek dat je een conclusie trekt ). Maak het spannend!";
+        }
 
         this.dataChannel!.send(JSON.stringify({
           type: "response.create",

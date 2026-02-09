@@ -929,7 +929,8 @@ export function NovaConversation() {
     }
   }, [campaignId]);
 
-  // Notify Nova when active question changes (question + results)
+  // Notify Nova when active question changes (NOT on every result update!)
+  // Nova fetches results on-demand via getResults() — no need to spam notifications
   useEffect(() => {
     if (!activeQuestion || !clientRef.current) return;
 
@@ -939,21 +940,15 @@ export function NovaConversation() {
       notification += `TYPE: POLL\n`;
       notification += `VRAAG: "${activeQuestion.title}"\n`;
       notification += `OPTIES: ${JSON.stringify(activeQuestion.options)}\n`;
-      if (activeQuestionResults?.votes) {
-        notification += `HUIDIGE STEMMEN: ${JSON.stringify(activeQuestionResults.votes)}\n`;
-      }
       notification += `\nALS RENS VRAAGT OM DEZE VRAAG TE TONEN → gebruik propose_poll met EXACT deze vraag. ALS RENS OM EEN ANDERE/NIEUWE VRAAG VRAAGT → maak gewoon een nieuwe.`;
     } else {
       notification += `TYPE: OPEN VRAAG\n`;
       notification += `VRAAG: "${activeQuestion.title}"\n`;
-      if (activeQuestionResults?.answers) {
-        notification += `HUIDIGE ANTWOORDEN: ${activeQuestionResults.answers.length} stuks\n`;
-      }
       notification += `\nALS RENS VRAAGT OM DEZE VRAAG TE TONEN → gebruik propose_open_vraag met EXACT deze vraag. ALS RENS OM EEN ANDERE/NIEUWE VRAAG VRAAGT → maak gewoon een nieuwe.`;
     }
 
     clientRef.current.sendSilentConversationEvent(notification);
-  }, [activeQuestion, activeQuestionResults]);
+  }, [activeQuestion]);
 
   // Clear live question (deactivate in Firebase)
   const handleClearLiveQuestion = useCallback(async () => {
