@@ -23,6 +23,7 @@ import {
   type NovaImageData,
   type SeatAllocationData,
 } from "@/lib/realtime-client";
+import { QRCodeSVG } from "qrcode.react";
 import { generateCampaignId, createCampaign, saveQuestions, setQuestionActive, subscribeToQuestions, subscribeToActiveQuestionResults, deactivateQuestion, type PreparedQuestion } from "@/lib/firebase";
 import { QuestionManager, type QuestionDisplayData, type PollResultItem as QMPollResultItem, type OpenAnswer } from "@/lib/question-manager";
 
@@ -508,7 +509,7 @@ export function NovaConversation() {
   // Campaign ID - generated once on mount, unique per session
   const campaignId = useMemo(() => generateCampaignId(), []);
   const [campaignReady, setCampaignReady] = useState(false);
-  const [showVoteLink, setShowVoteLink] = useState(false);
+
 
   // Create campaign in Firebase on mount
   useEffect(() => {
@@ -525,9 +526,7 @@ export function NovaConversation() {
   }, [campaignId]);
 
   // Vote URL for participants
-  const voteUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/vote/${campaignId}`
-    : `/vote/${campaignId}`;
+  const voteUrl = `/vote/${campaignId}`;
 
   // Setup / context state
   const [showSetup, setShowSetup] = useState(false);
@@ -550,6 +549,7 @@ export function NovaConversation() {
   const [sessionBriefing, setSessionBriefing] = useState("");
   const [isPreparing, setIsPreparing] = useState(false);
   const [showQuestionMenu, setShowQuestionMenu] = useState(false);
+  const [showQrCode, setShowQrCode] = useState(false);
   const [showCheatSheet, setShowCheatSheet] = useState(false);
   const [firebaseQuestions, setFirebaseQuestions] = useState<PreparedQuestion[]>([]);
   const [activeQuestion, setActiveQuestion] = useState<PreparedQuestion | null>(null);
@@ -1504,7 +1504,7 @@ export function NovaConversation() {
         {/* Demo controls top right */}
         <div className="absolute top-6 right-8 flex items-center gap-3 z-20">
           <button
-            onClick={() => setShowVoteLink(!showVoteLink)}
+            onClick={() => setShowQuestionMenu(prev => !prev)}
             style={{
               color: "rgba(255, 255, 255, 0.25)",
               fontSize: "10px",
@@ -1559,98 +1559,33 @@ export function NovaConversation() {
           >
             Tips
           </button>
-        </div>
-
-        {/* Vote Link Panel */}
-        {showVoteLink && campaignReady && (
-          <div
+          <button
+            onClick={() => setShowQrCode(true)}
             style={{
-              position: "absolute",
-              top: "64px",
-              right: "16px",
-              width: "340px",
-              background: "rgba(10, 10, 12, 0.95)",
-              backdropFilter: "blur(20px)",
-              border: "1px solid rgba(243, 3, 73, 0.3)",
-              borderRadius: "14px",
-              padding: "20px",
-              zIndex: 50,
-              animation: "fadeInSetup 0.2s ease",
-            }}
-          >
-            <div style={{
-              fontSize: "0.65rem",
-              fontWeight: 700,
-              color: "rgba(255, 255, 255, 0.4)",
+              color: "rgba(255, 255, 255, 0.25)",
+              fontSize: "10px",
+              fontWeight: 500,
               letterSpacing: "2px",
               textTransform: "uppercase",
-              marginBottom: "12px",
-            }}>
-              Deelnemers kunnen stemmen via
-            </div>
-            <div style={{
-              background: "rgba(255, 255, 255, 0.05)",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
-              borderRadius: "8px",
-              padding: "12px",
-              marginBottom: "12px",
-            }}>
-              <code style={{
-                color: "#f30349",
-                fontSize: "0.85rem",
-                wordBreak: "break-all",
-              }}>
-                {voteUrl}
-              </code>
-            </div>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(voteUrl);
-                }}
-                style={{
-                  flex: 1,
-                  background: "rgba(243, 3, 73, 0.15)",
-                  border: "1px solid rgba(243, 3, 73, 0.3)",
-                  borderRadius: "8px",
-                  padding: "10px",
-                  color: "#f30349",
-                  fontSize: "0.75rem",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                }}
-              >
-                Kopieer Link
-              </button>
-              <button
-                onClick={() => window.open(voteUrl, "_blank")}
-                style={{
-                  flex: 1,
-                  background: "rgba(255, 255, 255, 0.05)",
-                  border: "1px solid rgba(255, 255, 255, 0.1)",
-                  borderRadius: "8px",
-                  padding: "10px",
-                  color: "rgba(255, 255, 255, 0.6)",
-                  fontSize: "0.75rem",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                }}
-              >
-                Open in Nieuw Tab
-              </button>
-            </div>
-            <div style={{
-              marginTop: "12px",
-              fontSize: "0.7rem",
-              color: "rgba(255, 255, 255, 0.3)",
-              textAlign: "center",
-            }}>
-              Campaign ID: {campaignId}
-            </div>
-          </div>
-        )}
+              padding: "8px 14px",
+              borderRadius: "16px",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              background: "transparent",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)";
+              e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)";
+              e.currentTarget.style.color = "rgba(255, 255, 255, 0.25)";
+            }}
+          >
+            QR Code
+          </button>
+        </div>
 
         {/* Poll Display - landing page */}
         {activeModal === "poll" && currentPoll && (
@@ -1690,6 +1625,108 @@ export function NovaConversation() {
 
       {/* Cheat Sheet Modal - shared, outside overflow-hidden */}
       {showCheatSheet && <CheatSheetModal onClose={() => setShowCheatSheet(false)} />}
+
+      {/* QR Code Modal */}
+      {showQrCode && (
+        <div
+          onClick={() => setShowQrCode(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "radial-gradient(ellipse at 50% 40%, #0a0a14 0%, #000000 100%)",
+            backdropFilter: "blur(16px)",
+            animation: "fadeInSetup 0.25s ease",
+            cursor: "pointer",
+          }}
+        >
+          <div style={{
+            width: 48,
+            height: 48,
+            borderRadius: "50%",
+            background: "#f30349",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 20,
+            boxShadow: "0 0 30px rgba(243, 3, 73, 0.4)",
+          }}>
+            <span style={{ color: "white", fontSize: "1.5rem", fontWeight: 800 }}>N</span>
+          </div>
+          <div style={{
+            fontSize: "2rem",
+            fontWeight: 700,
+            color: "white",
+            letterSpacing: "3px",
+            textTransform: "uppercase",
+            marginBottom: 12,
+          }}>
+            Scan om te stemmen
+          </div>
+          <div style={{
+            width: 60,
+            height: 3,
+            borderRadius: 2,
+            background: "#f30349",
+            marginBottom: 40,
+          }} />
+          <div style={{
+            background: "white",
+            borderRadius: 24,
+            padding: 32,
+            border: "3px solid rgba(243, 3, 73, 0.4)",
+            boxShadow: "0 0 80px rgba(243, 3, 73, 0.2), 0 30px 60px rgba(0, 0, 0, 0.7)",
+          }}>
+            <QRCodeSVG value={typeof window !== "undefined" ? window.location.origin + voteUrl : voteUrl} size={360} level="M" />
+          </div>
+          <div style={{ marginTop: 24, color: "rgba(255, 255, 255, 0.5)", fontSize: "0.95rem", fontFamily: "monospace", letterSpacing: "0.02em" }} onClick={(e) => e.stopPropagation()}>
+            {typeof window !== "undefined" ? window.location.origin + voteUrl : voteUrl}
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const el = e.currentTarget;
+              const fullUrl = typeof window !== "undefined" ? window.location.origin + voteUrl : voteUrl;
+              navigator.clipboard.writeText(fullUrl).then(() => {
+                el.textContent = "Gekopieerd!";
+                el.style.color = "#22c55e";
+                el.style.borderColor = "rgba(34, 197, 94, 0.4)";
+                setTimeout(() => {
+                  el.textContent = "Kopieer link";
+                  el.style.color = "rgba(255, 255, 255, 0.7)";
+                  el.style.borderColor = "rgba(255, 255, 255, 0.15)";
+                }, 1500);
+              });
+            }}
+            style={{
+              marginTop: 12,
+              color: "rgba(255, 255, 255, 0.7)",
+              fontSize: "0.85rem",
+              fontWeight: 500,
+              background: "rgba(255, 255, 255, 0.05)",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
+              borderRadius: 10,
+              padding: "8px 20px",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+            }}
+          >
+            Kopieer link
+          </button>
+          <div style={{
+            marginTop: 48,
+            color: "rgba(255, 255, 255, 0.25)",
+            fontSize: "0.8rem",
+            letterSpacing: "1px",
+          }}>
+            Klik ergens om te sluiten
+          </div>
+        </div>
+      )}
     </>
     );
   }
@@ -1836,7 +1873,7 @@ export function NovaConversation() {
             <div className="flex items-center gap-3">
               {/* LIVE button — connection status indicator */}
               <button
-                onClick={() => setShowVoteLink(!showVoteLink)}
+                onClick={() => setShowQuestionMenu(prev => !prev)}
                 style={{
                   color: isError ? "#f30349"
                     : isConnecting ? "#f59e0b"
@@ -1864,8 +1901,7 @@ export function NovaConversation() {
                 {isError ? "Offline" : isConnecting ? "Connecting..." : "Live"}
               </button>
 
-              {firebaseQuestions.length > 0 && (
-                <button
+              <button
                   onClick={() => setShowQuestionMenu(prev => !prev)}
                   style={{
                     color: showQuestionMenu ? "rgba(25, 89, 105, 0.9)" : "rgba(255, 255, 255, 0.25)",
@@ -1894,7 +1930,7 @@ export function NovaConversation() {
                     }
                   }}
                 >
-                  Vragen ({firebaseQuestions.length})
+                  Stem / Vragen{firebaseQuestions.length > 0 ? ` (${firebaseQuestions.length})` : ""}
                   {activeQuestion !== null && (
                     <span style={{
                       position: "absolute",
@@ -1908,7 +1944,6 @@ export function NovaConversation() {
                     }} />
                   )}
                 </button>
-              )}
 
               <button
                 onClick={() => { setShowCheatSheet(prev => !prev); setShowQuestionMenu(false); }}
@@ -1972,7 +2007,7 @@ export function NovaConversation() {
         </header>
 
         {/* Questions slide-out panel */}
-        {showQuestionMenu && firebaseQuestions.length > 0 && (
+        {showQuestionMenu && (
           <div
             className="pointer-events-auto"
             style={{
@@ -1991,6 +2026,30 @@ export function NovaConversation() {
               animation: "fadeInSetup 0.2s ease",
             }}
           >
+            {/* QR Code toggle button */}
+            <button
+              onClick={() => setShowQrCode(true)}
+              style={{
+                width: "100%",
+                padding: "12px",
+                marginBottom: "12px",
+                borderRadius: "10px",
+                border: "1px solid rgba(243, 3, 73, 0.3)",
+                background: "rgba(243, 3, 73, 0.1)",
+                color: "#f30349",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "all 0.2s",
+                letterSpacing: "1px",
+                textTransform: "uppercase",
+              }}
+            >
+              Toon QR Code
+            </button>
+
+            {/* Questions list */}
+            {firebaseQuestions.length > 0 && (<>
             <div style={{
               fontSize: "0.6rem",
               fontWeight: 700,
@@ -2126,6 +2185,7 @@ export function NovaConversation() {
                 );
               })}
             </div>
+            </>)}
           </div>
         )}
 
@@ -2150,6 +2210,107 @@ export function NovaConversation() {
 
       {/* Cheat Sheet Modal - outside pointer-events-none */}
       {showCheatSheet && <CheatSheetModal onClose={() => setShowCheatSheet(false)} />}
+
+      {/* Fullscreen QR Code Modal */}
+      {showQrCode && (
+        <div
+          onClick={() => setShowQrCode(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "radial-gradient(ellipse at 50% 40%, #0a0a14 0%, #000000 100%)",
+            backdropFilter: "blur(16px)",
+            animation: "fadeInSetup 0.25s ease",
+            cursor: "pointer",
+          }}
+        >
+          <div style={{
+            width: 48,
+            height: 48,
+            borderRadius: "50%",
+            background: "#f30349",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 20,
+            boxShadow: "0 0 30px rgba(243, 3, 73, 0.4)",
+          }}>
+            <span style={{ color: "white", fontSize: "1.5rem", fontWeight: 800 }}>N</span>
+          </div>
+          <div style={{
+            fontSize: "2rem",
+            fontWeight: 700,
+            color: "white",
+            letterSpacing: "3px",
+            textTransform: "uppercase",
+            marginBottom: 12,
+          }}>
+            Scan om te stemmen
+          </div>
+          <div style={{
+            width: 60,
+            height: 3,
+            borderRadius: 2,
+            background: "#f30349",
+            marginBottom: 40,
+          }} />
+          <div style={{
+            background: "white",
+            borderRadius: 24,
+            padding: 32,
+            border: "3px solid rgba(243, 3, 73, 0.4)",
+            boxShadow: "0 0 80px rgba(243, 3, 73, 0.2), 0 30px 60px rgba(0, 0, 0, 0.7)",
+          }}>
+            <QRCodeSVG value={typeof window !== "undefined" ? window.location.origin + voteUrl : voteUrl} size={360} level="M" />
+          </div>
+          <div style={{ marginTop: 24, color: "rgba(255, 255, 255, 0.5)", fontSize: "0.95rem", fontFamily: "monospace", letterSpacing: "0.02em" }} onClick={(e) => e.stopPropagation()}>
+            {typeof window !== "undefined" ? window.location.origin + voteUrl : voteUrl}
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const el = e.currentTarget;
+              const fullUrl = typeof window !== "undefined" ? window.location.origin + voteUrl : voteUrl;
+              navigator.clipboard.writeText(fullUrl).then(() => {
+                el.textContent = "Gekopieerd!";
+                el.style.color = "#22c55e";
+                el.style.borderColor = "rgba(34, 197, 94, 0.4)";
+                setTimeout(() => {
+                  el.textContent = "Kopieer link";
+                  el.style.color = "rgba(255, 255, 255, 0.7)";
+                  el.style.borderColor = "rgba(255, 255, 255, 0.15)";
+                }, 1500);
+              });
+            }}
+            style={{
+              marginTop: 12,
+              color: "rgba(255, 255, 255, 0.7)",
+              fontSize: "0.85rem",
+              fontWeight: 500,
+              background: "rgba(255, 255, 255, 0.05)",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
+              borderRadius: 10,
+              padding: "8px 20px",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+            }}
+          >
+            Kopieer link
+          </button>
+          <div style={{
+            marginTop: 48,
+            color: "rgba(255, 255, 255, 0.25)",
+            fontSize: "0.8rem",
+          }}>
+            Klik om te sluiten
+          </div>
+        </div>
+      )}
 
       {/* Poll Display - only show when activeModal is poll */}
       {activeModal === "poll" && currentPoll && (

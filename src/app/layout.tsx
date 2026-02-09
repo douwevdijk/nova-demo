@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Space_Grotesk, Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
 
@@ -14,6 +14,14 @@ const cormorant = Cormorant_Garamond({
   weight: ["300", "400"],
   style: ["normal", "italic"],
 });
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+};
 
 export const metadata: Metadata = {
   title: "Nova — AI Consciousness",
