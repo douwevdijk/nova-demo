@@ -30,10 +30,12 @@ export async function POST(request: NextRequest) {
 
     const typeInstruction =
       qType === "poll"
-        ? "Maak ALLEEN multiple choice vragen met 3-4 antwoordopties per vraag."
+        ? "Maak ALLEEN multiple choice vragen (type: poll) met 3-4 antwoordopties per vraag."
         : qType === "open"
-          ? "Maak ALLEEN open vragen (geen antwoordopties)."
-          : "Maak een mix van multiple choice vragen (met 3-4 antwoordopties) en open vragen.";
+          ? "Maak ALLEEN open vragen (type: open, geen antwoordopties)."
+          : qType === "quiz"
+            ? "Maak ALLEEN quizvragen (type: quiz). Dit zijn kennisvragen met één correct tekstantwoord. Geen antwoordopties."
+            : "Maak een mix van multiple choice vragen (type: poll, met 3-4 antwoordopties), open vragen (type: open) en quizvragen (type: quiz).";
 
     const prompt = `Je bent een AI-assistent die live evenementen voorbereidt. Je krijgt ruwe input van een gebruiker en moet dit omzetten naar twee dingen:
 
@@ -69,34 +71,7 @@ ${typeInstruction}
 - Multiple choice opties moeten kort en krachtig zijn
 - Open vragen moeten uitnodigen tot korte, krachtige antwoorden
 - Alle vragen in het Nederlands
-
-═══════════════════════════════════════════
-SEED ANTWOORDEN - CRUCIAAL VOOR DE DEMO!
-═══════════════════════════════════════════
-
-⚠️ LEES DIT ZEER ZORGVULDIG - DE SEED ANTWOORDEN MOETEN 100% PASSEN BIJ DE VRAAG!
-
-Voor POLL vragen:
-- "seedVotes": verdeling van stemmen over de opties (totaal 15-25 stemmen, NIET gelijk verdeeld)
-
-Voor OPEN vragen - HIER GAAT HET VAAK FOUT:
-- "seedAnswers": 10-12 antwoorden die LETTERLIJK antwoord geven op de gestelde vraag
-- Stel jezelf de vraag: "Als iemand deze vraag stelt, wat zou een persoon antwoorden?"
-
-CONCRETE VOORBEELDEN:
-
-Vraag: "Wat is je grootste uitdaging met AI?"
-seedAnswers: ["Te weinig kennis in het team", "Privacy en security", "Weerstand van collega's", "Geen budget", "Weet niet waar te beginnen", "Data kwaliteit", "Angst voor baanverlies", "Te veel hype", "Integratie met bestaande systemen", "Management snapt het niet"]
-
-Vraag: "Welk dier zou je organisatie zijn?"
-seedAnswers: ["Een schildpad - traag maar gestaag", "Mieren - hard werken", "Kameel - overleven in de woestijn", "Octopus - flexibel", "Bij - teamwork", "Slak", "Dinosaurus helaas", "Kameleon - aanpassen", "Eekhoorn - hamsteren", "Uil - wijs maar langzaam"]
-
-Vraag: "Waar denk je aan bij innovatie?"
-seedAnswers: ["Nieuwe technologie", "Risico nemen", "Out of the box denken", "Startups", "Verandering", "Toekomst", "AI", "Experimenteren", "Samenwerken", "Disruptie", "Creativiteit"]
-
-⚠️ FOUTE ANTWOORDEN (NOOIT GEBRUIKEN):
-- "Ja", "Nee", "Misschien", "Goed idee", "Interessant", "Eens", "Oneens", "Weet niet"
-- Deze zijn GENERIEK en passen NIET als antwoord op een open vraag!
+- Quiz vragen zijn kennisvragen met één correct tekstantwoord (geen opties)
 
 ═══════════════════════════════════════════
 ANTWOORD VERPLICHT IN DIT EXACTE JSON FORMAT (geen markdown, geen backticks, puur JSON):
@@ -106,17 +81,15 @@ ANTWOORD VERPLICHT IN DIT EXACTE JSON FORMAT (geen markdown, geen backticks, puu
     {
       "type": "poll",
       "question": "De poll vraag?",
-      "options": ["Optie A", "Optie B", "Optie C"],
-      "seedVotes": [
-        {"option": "Optie A", "count": 12},
-        {"option": "Optie B", "count": 8},
-        {"option": "Optie C", "count": 5}
-      ]
+      "options": ["Optie A", "Optie B", "Optie C"]
     },
     {
       "type": "open",
-      "question": "De open vraag?",
-      "seedAnswers": ["Specifiek antwoord 1 op de vraag", "Specifiek antwoord 2", "Specifiek antwoord 3", "etc - 10-12 totaal"]
+      "question": "De open vraag?"
+    },
+    {
+      "type": "quiz",
+      "question": "De quiz vraag?"
     }
   ]
 }`;

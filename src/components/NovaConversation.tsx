@@ -2367,105 +2367,6 @@ export function NovaConversation() {
         </div>
       )}
 
-      {/* Web search searching indicator (top-left) */}
-      {searchSearching && (
-        <div
-          style={{
-            position: "fixed",
-            top: "32px",
-            left: "32px",
-            display: "flex",
-            alignItems: "center",
-            gap: "16px",
-            padding: "20px 32px",
-            borderRadius: "18px",
-            background: "rgba(10, 10, 10, 0.95)",
-            border: "2px solid rgba(25, 89, 105, 0.4)",
-            boxShadow: "0 0 60px rgba(25, 89, 105, 0.15), 0 8px 32px rgba(0, 0, 0, 0.5)",
-            zIndex: 9999,
-          }}
-        >
-          <div
-            style={{
-              width: "44px",
-              height: "44px",
-              borderRadius: "50%",
-              background: "rgba(25, 89, 105, 0.15)",
-              border: "2px solid rgba(25, 89, 105, 0.4)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <div
-              style={{
-                width: "14px",
-                height: "14px",
-                borderRadius: "50%",
-                background: "#195969",
-                boxShadow: "0 0 12px #195969",
-                animation: "pulse 1.5s ease-in-out infinite",
-              }}
-            />
-          </div>
-          <div>
-            <div style={{ color: "white", fontSize: "1.15rem", fontWeight: 700 }}>
-              Zoeken op internet
-            </div>
-            <div style={{ color: "rgba(255, 255, 255, 0.45)", fontSize: "0.9rem", marginTop: "4px" }}>
-              Even geduld...
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Web search ready notification (top-left) */}
-      {searchPending && !searchSearching && (
-        <div
-          style={{
-            position: "fixed",
-            top: "32px",
-            left: "32px",
-            display: "flex",
-            alignItems: "center",
-            gap: "16px",
-            padding: "20px 32px",
-            borderRadius: "18px",
-            background: "rgba(25, 89, 105, 0.12)",
-            border: "2px solid rgba(25, 89, 105, 0.6)",
-            boxShadow: "0 0 60px rgba(25, 89, 105, 0.25), 0 8px 32px rgba(0, 0, 0, 0.5)",
-            zIndex: 9999,
-            animation: "searchReadyPulse 2s ease-in-out infinite",
-          }}
-        >
-          <div
-            style={{
-              width: "48px",
-              height: "48px",
-              borderRadius: "50%",
-              background: "#195969",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "1.1rem",
-              fontWeight: 900,
-              color: "white",
-              boxShadow: "0 0 25px rgba(25, 89, 105, 0.6)",
-            }}
-          >
-            N
-          </div>
-          <div>
-            <div style={{ color: "white", fontSize: "1.2rem", fontWeight: 700 }}>
-              Zoekresultaten binnen!
-            </div>
-            <div style={{ color: "rgba(255, 255, 255, 0.55)", fontSize: "0.9rem", marginTop: "4px" }}>
-              Vraag Nova om ze te laten zien
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Open Vraag Display - only show when activeModal is openvraag */}
       {activeModal === "openvraag" && openVraag && (
         <OpenVraagDisplay
@@ -2523,108 +2424,204 @@ export function NovaConversation() {
       {activeModal === "image" && novaImage && (
         <NovaImageDisplay
           data={novaImage}
-          onClose={() => setActiveModal("none")}
+          onClose={() => {
+            setActiveModal("none");
+            setNovaImage(null);
+          }}
         />
       )}
 
-      {/* Image generating indicator (top-left, big, always on top) */}
-      {imageGenerating && (
-        <div
-          style={{
-            position: "fixed",
-            top: "32px",
-            left: "32px",
-            display: "flex",
-            alignItems: "center",
-            gap: "16px",
-            padding: "20px 32px",
-            borderRadius: "18px",
-            background: "rgba(10, 10, 10, 0.95)",
-            border: "2px solid rgba(243, 3, 73, 0.4)",
-            boxShadow: "0 0 60px rgba(243, 3, 73, 0.15), 0 8px 32px rgba(0, 0, 0, 0.5)",
-            zIndex: 9999,
-          }}
-        >
+      {/* Top-left notification stack */}
+      <div
+        style={{
+          position: "fixed",
+          top: "32px",
+          left: "32px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "12px",
+          zIndex: 9999,
+        }}
+      >
+        {imageGenerating && (
           <div
+            key="img-gen"
             style={{
-              width: "44px",
-              height: "44px",
-              borderRadius: "50%",
-              background: "rgba(243, 3, 73, 0.15)",
-              border: "2px solid rgba(243, 3, 73, 0.4)",
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
+              gap: "16px",
+              padding: "20px 32px",
+              borderRadius: "18px",
+              background: "rgba(10, 10, 10, 0.95)",
+              border: "2px solid rgba(243, 3, 73, 0.4)",
+              boxShadow: "0 0 60px rgba(243, 3, 73, 0.15), 0 8px 32px rgba(0, 0, 0, 0.5)",
             }}
           >
             <div
               style={{
-                width: "14px",
-                height: "14px",
+                width: "44px",
+                height: "44px",
                 borderRadius: "50%",
-                background: "#f30349",
-                boxShadow: "0 0 12px #f30349",
-                animation: "pulse 1.5s ease-in-out infinite",
+                background: "rgba(243, 3, 73, 0.15)",
+                border: "2px solid rgba(243, 3, 73, 0.4)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}
-            />
-          </div>
-          <div>
-            <div style={{ color: "white", fontSize: "1.15rem", fontWeight: 700 }}>
-              Image wordt gegenereerd
+            >
+              <div
+                style={{
+                  width: "14px",
+                  height: "14px",
+                  borderRadius: "50%",
+                  background: "#f30349",
+                  boxShadow: "0 0 12px #f30349",
+                  animation: "pulse 1.5s ease-in-out infinite",
+                }}
+              />
             </div>
-            <div style={{ color: "rgba(255, 255, 255, 0.45)", fontSize: "0.9rem", marginTop: "4px" }}>
-              Even geduld, dit kan 10-20 seconden duren...
+            <div>
+              <div style={{ color: "white", fontSize: "1.15rem", fontWeight: 700 }}>
+                Image wordt gegenereerd
+              </div>
+              <div style={{ color: "rgba(255, 255, 255, 0.45)", fontSize: "0.9rem", marginTop: "4px" }}>
+                Even geduld, dit kan 10-20 seconden duren...
+              </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Image ready notification (top-left, big, always on top) */}
-      {imagePending && !imageGenerating && activeModal !== "image" && (
-        <div
-          style={{
-            position: "fixed",
-            top: "32px",
-            left: "32px",
-            display: "flex",
-            alignItems: "center",
-            gap: "16px",
-            padding: "20px 32px",
-            borderRadius: "18px",
-            background: "rgba(243, 3, 73, 0.12)",
-            border: "2px solid rgba(243, 3, 73, 0.6)",
-            boxShadow: "0 0 60px rgba(243, 3, 73, 0.25), 0 8px 32px rgba(0, 0, 0, 0.5)",
-            zIndex: 9999,
-            animation: "imageReadyPulse 2s ease-in-out infinite",
-          }}
-        >
+        )}
+        {searchSearching && (
           <div
+            key="search-gen"
             style={{
-              width: "48px",
-              height: "48px",
-              borderRadius: "50%",
-              background: "#f30349",
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              fontSize: "1.1rem",
-              fontWeight: 900,
-              color: "white",
-              boxShadow: "0 0 25px rgba(243, 3, 73, 0.6)",
+              gap: "16px",
+              padding: "20px 32px",
+              borderRadius: "18px",
+              background: "rgba(10, 10, 10, 0.95)",
+              border: "2px solid rgba(25, 89, 105, 0.4)",
+              boxShadow: "0 0 60px rgba(25, 89, 105, 0.15), 0 8px 32px rgba(0, 0, 0, 0.5)",
             }}
           >
-            N
-          </div>
-          <div>
-            <div style={{ color: "white", fontSize: "1.2rem", fontWeight: 700 }}>
-              Image is klaar!
+            <div
+              style={{
+                width: "44px",
+                height: "44px",
+                borderRadius: "50%",
+                background: "rgba(25, 89, 105, 0.15)",
+                border: "2px solid rgba(25, 89, 105, 0.4)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <div
+                style={{
+                  width: "14px",
+                  height: "14px",
+                  borderRadius: "50%",
+                  background: "#195969",
+                  boxShadow: "0 0 12px #195969",
+                  animation: "pulse 1.5s ease-in-out infinite",
+                }}
+              />
             </div>
-            <div style={{ color: "rgba(255, 255, 255, 0.55)", fontSize: "0.9rem", marginTop: "4px" }}>
-              Vraag Nova om het te laten zien
+            <div>
+              <div style={{ color: "white", fontSize: "1.15rem", fontWeight: 700 }}>
+                Zoeken op internet
+              </div>
+              <div style={{ color: "rgba(255, 255, 255, 0.45)", fontSize: "0.9rem", marginTop: "4px" }}>
+                Even geduld...
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+        {imagePending && !imageGenerating && activeModal !== "image" && (
+          <div
+            key="img-ready"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "16px",
+              padding: "20px 32px",
+              borderRadius: "18px",
+              background: "rgba(10, 10, 10, 0.95)",
+              border: "2px solid rgba(243, 3, 73, 0.6)",
+              boxShadow: "0 0 60px rgba(243, 3, 73, 0.25), 0 8px 32px rgba(0, 0, 0, 0.5)",
+              animation: "imageReadyPulse 2s ease-in-out infinite",
+            }}
+          >
+            <div
+              style={{
+                width: "48px",
+                height: "48px",
+                borderRadius: "50%",
+                background: "#f30349",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "1.1rem",
+                fontWeight: 900,
+                color: "white",
+                boxShadow: "0 0 25px rgba(243, 3, 73, 0.6)",
+              }}
+            >
+              N
+            </div>
+            <div>
+              <div style={{ color: "white", fontSize: "1.2rem", fontWeight: 700 }}>
+                Image is klaar!
+              </div>
+              <div style={{ color: "rgba(255, 255, 255, 0.55)", fontSize: "0.9rem", marginTop: "4px" }}>
+                Vraag Nova om het te laten zien
+              </div>
+            </div>
+          </div>
+        )}
+        {searchPending && !searchSearching && (
+          <div
+            key="search-ready"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "16px",
+              padding: "20px 32px",
+              borderRadius: "18px",
+              background: "rgba(10, 10, 10, 0.95)",
+              border: "2px solid rgba(25, 89, 105, 0.6)",
+              boxShadow: "0 0 60px rgba(25, 89, 105, 0.25), 0 8px 32px rgba(0, 0, 0, 0.5)",
+              animation: "searchReadyPulse 2s ease-in-out infinite",
+            }}
+          >
+            <div
+              style={{
+                width: "48px",
+                height: "48px",
+                borderRadius: "50%",
+                background: "#195969",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "1.1rem",
+                fontWeight: 900,
+                color: "white",
+                boxShadow: "0 0 25px rgba(25, 89, 105, 0.6)",
+              }}
+            >
+              N
+            </div>
+            <div>
+              <div style={{ color: "white", fontSize: "1.2rem", fontWeight: 700 }}>
+                Zoekresultaten binnen!
+              </div>
+              <div style={{ color: "rgba(255, 255, 255, 0.55)", fontSize: "0.9rem", marginTop: "4px" }}>
+                Vraag Nova om ze te laten zien
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       <style jsx global>{`
         @keyframes pulse {

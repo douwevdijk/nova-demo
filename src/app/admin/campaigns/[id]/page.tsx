@@ -5,12 +5,8 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   Plus,
-  MoreVertical,
   Pencil,
   Trash2,
-  Play,
-  Square,
-  GripVertical,
   MessageSquare,
   Sparkles,
   Loader2,
@@ -86,7 +82,6 @@ export default function CampaignDetailPage({ params }: PageProps) {
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [deletingQuestion, setDeletingQuestion] = useState<Question | null>(null);
   const [saving, setSaving] = useState(false);
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
   // Settings form state
   const [settingsForm, setSettingsForm] = useState({
@@ -99,6 +94,7 @@ export default function CampaignDetailPage({ params }: PageProps) {
 
   // AI Generation state
   const [showAIGenerator, setShowAIGenerator] = useState(false);
+  const [aiStep, setAiStep] = useState<1 | 2 | 3>(1);
   const [aiPrompt, setAiPrompt] = useState<CampaignPrompt>({
     topic: '',
     audience: '',
@@ -106,10 +102,10 @@ export default function CampaignDetailPage({ params }: PageProps) {
     notes: '',
   });
   const [questionCount, setQuestionCount] = useState(3);
-  const [questionType, setQuestionType] = useState<'poll' | 'open' | 'mix'>('mix');
+  const [questionType, setQuestionType] = useState<'poll' | 'open' | 'quiz' | 'mix'>('mix');
   const [generating, setGenerating] = useState(false);
   const [generatedQuestions, setGeneratedQuestions] = useState<Array<{
-    type: 'poll' | 'open';
+    type: 'poll' | 'open' | 'quiz';
     question: string;
     options?: string[];
     selected: boolean;
@@ -118,7 +114,7 @@ export default function CampaignDetailPage({ params }: PageProps) {
   // Question form state
   const [formData, setFormData] = useState({
     title: '',
-    type: 'poll' as 'poll' | 'open' | 'multi',
+    type: 'poll' as 'poll' | 'open' | 'multi' | 'quiz',
     options: [{ id: '', label: '' }, { id: '', label: '' }] as QuestionOption[],
     isProfileQuestion: false,
     profileField: '',
@@ -153,15 +149,6 @@ export default function CampaignDetailPage({ params }: PageProps) {
   useEffect(() => {
     loadData();
   }, [campaignId]);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClick = () => setOpenDropdown(null);
-    if (openDropdown) {
-      document.addEventListener('click', handleClick);
-      return () => document.removeEventListener('click', handleClick);
-    }
-  }, [openDropdown]);
 
   // Settings handlers
   const handleSaveSettings = async () => {
@@ -210,6 +197,7 @@ export default function CampaignDetailPage({ params }: PageProps) {
         selected: true,
       }));
       setGeneratedQuestions(questions);
+      setAiStep(2);
 
       await updateCampaign(campaignId, { prompt: aiPrompt });
     } catch (error) {
@@ -233,6 +221,7 @@ export default function CampaignDetailPage({ params }: PageProps) {
       }
       setGeneratedQuestions([]);
       setShowAIGenerator(false);
+      setAiStep(1);
       loadData();
     } catch (error) {
       console.error('Failed to save questions:', error);
@@ -269,27 +258,31 @@ export default function CampaignDetailPage({ params }: PageProps) {
       profileField: question.profileField || '',
     });
     setIsModalOpen(true);
-    setOpenDropdown(null);
   };
 
   const handleDelete = (question: Question) => {
     setDeletingQuestion(question);
     setIsDeleteModalOpen(true);
-    setOpenDropdown(null);
   };
 
   const handleToggleActive = async (question: Question) => {
+    // Optimistic update — no full reload
+    const newActive = !question.active;
+    setQuestions(prev => prev.map(q => ({
+      ...q,
+      active: q.id === question.id ? newActive : false,
+    })));
+
     try {
       if (question.active) {
         await deactivateAllQuestions(campaignId);
       } else {
         await setQuestionActiveAdmin(campaignId, question.id);
       }
-      loadData();
     } catch (error) {
       console.error('Failed to toggle active:', error);
+      loadData(); // Rollback on error
     }
-    setOpenDropdown(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -519,146 +512,208 @@ export default function CampaignDetailPage({ params }: PageProps) {
           {/* Actions bar */}
           <div className="flex items-center justify-between mb-6">
             <button
-              onClick={() => setShowAIGenerator(!showAIGenerator)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                showAIGenerator
-                  ? 'bg-purple-100 text-purple-700'
-                  : 'border border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
+              onClick={() => { setAiStep(1); setGeneratedQuestions([]); setShowAIGenerator(true); }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
             >
               <Sparkles size={18} />
               AI Genereren
             </button>
             <button
               onClick={handleCreate}
-              className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
+              className="flex items-center gap-2 rounded-lg text-sm font-medium"
+              style={{ padding: '10px 16px', backgroundColor: '#4f46e5', color: '#ffffff', cursor: 'pointer', border: 'none' }}
             >
               <Plus size={18} />
               Nieuwe vraag
             </button>
           </div>
 
-          {/* AI Generator Panel */}
-          {showAIGenerator && (
-            <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-6 mb-6">
-              <div className="flex items-center gap-2 mb-5">
-                <Sparkles className="text-purple-600" size={20} />
-                <h2 className="text-lg font-semibold text-slate-900">AI Vragen Genereren</h2>
+          {/* AI Generator Modal */}
+          <Modal
+            isOpen={showAIGenerator}
+            onClose={() => setShowAIGenerator(false)}
+            title={aiStep === 1 ? 'AI Vragen Genereren' : aiStep === 2 ? 'Vragen selecteren' : 'Toevoegen'}
+            size="lg"
+          >
+            <div className="p-6">
+              {/* Step indicator */}
+              <div className="flex items-center gap-2 mb-6">
+                {[1, 2, 3].map((step) => (
+                  <div key={step} className="flex items-center gap-2">
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold"
+                      style={{
+                        backgroundColor: aiStep >= step ? '#9333ea' : '#e2e8f0',
+                        color: aiStep >= step ? '#ffffff' : '#94a3b8',
+                      }}
+                    >
+                      {aiStep > step ? '\u2713' : step}
+                    </div>
+                    <span className={`text-xs font-medium ${aiStep >= step ? 'text-slate-900' : 'text-slate-400'}`}>
+                      {step === 1 ? 'Configuratie' : step === 2 ? 'Voorstel' : 'Toevoegen'}
+                    </span>
+                    {step < 3 && <div className="w-8 h-px" style={{ backgroundColor: aiStep > step ? '#9333ea' : '#e2e8f0' }} />}
+                  </div>
+                ))}
               </div>
 
-              <div className="grid grid-cols-2 gap-5 mb-5">
+              {/* Step 1: Config */}
+              {aiStep === 1 && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Onderwerp *
-                  </label>
-                  <input
-                    type="text"
-                    value={aiPrompt.topic}
-                    onChange={(e) => setAiPrompt({ ...aiPrompt, topic: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                    placeholder="Bijv. Digitale transformatie, AI in de zorg..."
-                  />
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Onderwerp *</label>
+                      <input
+                        type="text"
+                        value={aiPrompt.topic}
+                        onChange={(e) => setAiPrompt({ ...aiPrompt, topic: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                        placeholder="Bijv. Digitale transformatie, AI in de zorg..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Doelgroep</label>
+                      <input
+                        type="text"
+                        value={aiPrompt.audience}
+                        onChange={(e) => setAiPrompt({ ...aiPrompt, audience: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                        placeholder="Bijv. HR managers, studenten, directie..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Gewenste toon</label>
+                      <input
+                        type="text"
+                        value={aiPrompt.tone}
+                        onChange={(e) => setAiPrompt({ ...aiPrompt, tone: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                        placeholder="Bijv. Professioneel, informeel, humoristisch..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Extra notities</label>
+                      <input
+                        type="text"
+                        value={aiPrompt.notes}
+                        onChange={(e) => setAiPrompt({ ...aiPrompt, notes: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                        placeholder="Bijv. Focus op praktische toepassingen..."
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-end gap-4 mb-6">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Aantal vragen</label>
+                      <CustomSelect
+                        value={questionCount}
+                        onChange={(val) => setQuestionCount(parseInt(val))}
+                        options={[2, 3, 4, 5, 6, 7, 8].map(n => ({ value: n, label: `${n} vragen` }))}
+                        className="w-32"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Type vragen</label>
+                      <CustomSelect
+                        value={questionType}
+                        onChange={(val) => setQuestionType(val as 'poll' | 'open' | 'quiz' | 'mix')}
+                        options={[
+                          { value: 'mix', label: 'Mix (alle types)' },
+                          { value: 'poll', label: 'Alleen polls' },
+                          { value: 'open', label: 'Alleen open vragen' },
+                          { value: 'quiz', label: 'Alleen quizvragen' },
+                        ]}
+                        className="w-48"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+                    <button
+                      onClick={() => setShowAIGenerator(false)}
+                      className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      Annuleren
+                    </button>
+                    <button
+                      onClick={handleGenerateQuestions}
+                      disabled={generating || !aiPrompt.topic.trim()}
+                      className="flex items-center gap-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                      style={{ padding: '10px 20px', backgroundColor: '#9333ea', color: '#ffffff', cursor: 'pointer', border: 'none' }}
+                    >
+                      {generating ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          Genereren...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={16} />
+                          Genereer vragen
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Doelgroep
-                  </label>
-                  <input
-                    type="text"
-                    value={aiPrompt.audience}
-                    onChange={(e) => setAiPrompt({ ...aiPrompt, audience: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                    placeholder="Bijv. HR managers, studenten, directie..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Gewenste toon
-                  </label>
-                  <input
-                    type="text"
-                    value={aiPrompt.tone}
-                    onChange={(e) => setAiPrompt({ ...aiPrompt, tone: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                    placeholder="Bijv. Professioneel, informeel, humoristisch..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Extra notities
-                  </label>
-                  <input
-                    type="text"
-                    value={aiPrompt.notes}
-                    onChange={(e) => setAiPrompt({ ...aiPrompt, notes: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                    placeholder="Bijv. Focus op praktische toepassingen..."
-                  />
-                </div>
-              </div>
+              )}
 
-              <div className="flex items-end gap-4">
+              {/* Step 2: Review generated questions */}
+              {aiStep === 2 && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Aantal vragen
-                  </label>
-                  <CustomSelect
-                    value={questionCount}
-                    onChange={(val) => setQuestionCount(parseInt(val))}
-                    options={[2, 3, 4, 5, 6, 7, 8].map(n => ({ value: n, label: `${n} vragen` }))}
-                    className="w-32"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Type vragen
-                  </label>
-                  <CustomSelect
-                    value={questionType}
-                    onChange={(val) => setQuestionType(val as 'poll' | 'open' | 'mix')}
-                    options={[
-                      { value: 'mix', label: 'Mix (poll + open)' },
-                      { value: 'poll', label: 'Alleen polls' },
-                      { value: 'open', label: 'Alleen open vragen' },
-                    ]}
-                    className="w-48"
-                  />
-                </div>
-                <button
-                  onClick={handleGenerateQuestions}
-                  disabled={generating || !aiPrompt.topic.trim()}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                >
-                  {generating ? (
-                    <>
-                      <Loader2 size={18} className="animate-spin" />
-                      Genereren...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles size={18} />
-                      Genereer
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* Generated Questions Preview */}
-              {generatedQuestions.length > 0 && (
-                <div className="mt-6 pt-6 border-t border-purple-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-medium text-slate-900">
-                      Gegenereerde vragen ({generatedQuestions.filter(q => q.selected).length} geselecteerd)
-                    </h3>
+                  <p className="text-sm text-slate-500 mb-4">
+                    {generatedQuestions.filter(q => q.selected).length} van {generatedQuestions.length} vragen geselecteerd. Klik om te (de)selecteren.
+                  </p>
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto mb-6">
+                    {generatedQuestions.map((q, index) => (
+                      <div
+                        key={index}
+                        onClick={() => toggleQuestionSelection(index)}
+                        className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                          q.selected
+                            ? 'border-purple-300 ring-1 ring-purple-200 bg-purple-50/50'
+                            : 'border-slate-200 opacity-60'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div
+                            className="w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5 flex-shrink-0"
+                            style={{
+                              backgroundColor: q.selected ? '#9333ea' : '#ffffff',
+                              borderColor: q.selected ? '#9333ea' : '#cbd5e1',
+                            }}
+                          >
+                            {q.selected && <Check size={12} className="text-white" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                q.type === 'poll' ? 'bg-blue-100 text-blue-700' : q.type === 'quiz' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                              }`}>
+                                {q.type === 'poll' ? 'Poll' : q.type === 'quiz' ? 'Quiz' : 'Open'}
+                              </span>
+                            </div>
+                            <p className="font-medium text-slate-900 text-sm">{q.question}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-between pt-4 border-t border-slate-200">
+                    <button
+                      onClick={() => setAiStep(1)}
+                      className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      Terug
+                    </button>
                     <button
                       onClick={handleSaveGeneratedQuestions}
                       disabled={saving || generatedQuestions.filter(q => q.selected).length === 0}
-                      className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                      className="flex items-center gap-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                      style={{ padding: '10px 20px', backgroundColor: '#16a34a', color: '#ffffff', cursor: 'pointer', border: 'none' }}
                     >
                       {saving ? (
                         <>
                           <Loader2 size={16} className="animate-spin" />
-                          Opslaan...
+                          Toevoegen...
                         </>
                       ) : (
                         <>
@@ -668,47 +723,10 @@ export default function CampaignDetailPage({ params }: PageProps) {
                       )}
                     </button>
                   </div>
-
-                  <div className="space-y-3">
-                    {generatedQuestions.map((q, index) => (
-                      <div
-                        key={index}
-                        onClick={() => toggleQuestionSelection(index)}
-                        className={`p-4 bg-white border rounded-lg cursor-pointer transition-all ${
-                          q.selected
-                            ? 'border-purple-300 ring-1 ring-purple-200'
-                            : 'border-slate-200 opacity-60'
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5 flex-shrink-0 ${
-                            q.selected ? 'bg-purple-600 border-purple-600' : 'border-slate-300 bg-white'
-                          }`}>
-                            {q.selected && <Check size={12} className="text-white" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                q.type === 'poll' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'
-                              }`}>
-                                {q.type === 'poll' ? 'Poll' : 'Open'}
-                              </span>
-                            </div>
-                            <p className="font-medium text-slate-900">{q.question}</p>
-                            {q.options && q.options.length > 0 && (
-                              <p className="text-sm text-slate-500 mt-1 truncate">
-                                {q.options.join(' • ')}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               )}
             </div>
-          )}
+          </Modal>
 
           {/* Questions List */}
           {questions.length === 0 ? (
@@ -720,7 +738,7 @@ export default function CampaignDetailPage({ params }: PageProps) {
               <p className="text-slate-500 mb-6">Voeg je eerste vraag toe aan deze campaign.</p>
               <div className="flex items-center justify-center gap-3">
                 <button
-                  onClick={() => setShowAIGenerator(true)}
+                  onClick={() => { setAiStep(1); setGeneratedQuestions([]); setShowAIGenerator(true); }}
                   className="inline-flex items-center gap-2 px-4 py-2.5 border border-purple-200 text-purple-700 hover:bg-purple-50 rounded-lg text-sm font-medium transition-colors"
                 >
                   <Sparkles size={18} />
@@ -728,7 +746,8 @@ export default function CampaignDetailPage({ params }: PageProps) {
                 </button>
                 <button
                   onClick={handleCreate}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  className="inline-flex items-center gap-2 rounded-lg text-sm font-medium"
+                  style={{ padding: '10px 16px', backgroundColor: '#4f46e5', color: '#ffffff', cursor: 'pointer', border: 'none' }}
                 >
                   <Plus size={18} />
                   Handmatig toevoegen
@@ -736,118 +755,79 @@ export default function CampaignDetailPage({ params }: PageProps) {
               </div>
             </div>
           ) : (
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-6 py-4">
-                      Vraag
-                    </th>
-                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-6 py-4 w-24">
-                      Type
-                    </th>
-                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-6 py-4 w-32">
-                      Profiel
-                    </th>
-                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-6 py-4 w-24">
-                      Status
-                    </th>
-                    <th className="w-16"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {questions.map((question) => (
-                    <tr key={question.id} className="hover:bg-slate-50 group">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <GripVertical className="text-slate-300 cursor-move" size={18} />
-                          <div>
-                            <p className="font-medium text-slate-900">{question.title}</p>
-                            {question.options && question.options.length > 0 && (
-                              <p className="text-sm text-slate-500 mt-0.5">
-                                {question.options.map(o => o.label).join(' • ')}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+            <div className="space-y-3">
+              {questions.map((question) => (
+                <div
+                  key={question.id}
+                  className={`bg-white border rounded-xl p-4 transition-colors ${
+                    question.active
+                      ? 'border-green-300 ring-1 ring-green-200 bg-green-50/50'
+                      : 'border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    {/* Toggle button */}
+                    <button
+                      onClick={() => handleToggleActive(question)}
+                      className="flex-shrink-0 rounded-lg text-sm font-semibold"
+                      style={{
+                        minWidth: 80,
+                        padding: '10px 20px',
+                        backgroundColor: question.active ? '#16a34a' : '#1e293b',
+                        color: '#ffffff',
+                        border: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {question.active ? '● Live' : 'Activeer'}
+                    </button>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                           question.type === 'poll' || question.type === 'multi'
                             ? 'bg-blue-100 text-blue-700'
-                            : 'bg-orange-100 text-orange-700'
+                            : question.type === 'quiz'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-orange-100 text-orange-700'
                         }`}>
-                          {question.type === 'poll' || question.type === 'multi' ? 'Poll' : 'Open'}
+                          {question.type === 'poll' || question.type === 'multi' ? 'Poll' : question.type === 'quiz' ? 'Quiz' : 'Open'}
                         </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        {question.isProfileQuestion ? (
-                          <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                            {question.profileField || 'Ja'}
+                        {question.isProfileQuestion && (
+                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">
+                            {question.profileField || 'Profiel'}
                           </span>
-                        ) : (
-                          <span className="text-slate-400 text-sm">—</span>
                         )}
-                      </td>
-                      <td className="px-6 py-4">
-                        {question.active ? (
-                          <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                            Live
+                        {question.active && (
+                          <span className="px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700 uppercase tracking-wide">
+                            Actief
                           </span>
-                        ) : (
-                          <span className="text-slate-400 text-sm">Inactief</span>
                         )}
-                      </td>
-                      <td className="px-6 py-4 relative">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenDropdown(openDropdown === question.id ? null : question.id);
-                          }}
-                          className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-                        >
-                          <MoreVertical size={18} />
-                        </button>
+                      </div>
+                      <p className="font-medium text-slate-900 mt-1 truncate">{question.title}</p>
+                    </div>
 
-                        {openDropdown === question.id && (
-                          <div className="absolute right-6 top-12 w-48 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-10">
-                            <button
-                              onClick={() => handleToggleActive(question)}
-                              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                            >
-                              {question.active ? (
-                                <>
-                                  <Square size={16} />
-                                  Deactiveren
-                                </>
-                              ) : (
-                                <>
-                                  <Play size={16} />
-                                  Live zetten
-                                </>
-                              )}
-                            </button>
-                            <button
-                              onClick={() => handleEdit(question)}
-                              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                            >
-                              <Pencil size={16} />
-                              Bewerken
-                            </button>
-                            <button
-                              onClick={() => handleDelete(question)}
-                              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                            >
-                              <Trash2 size={16} />
-                              Verwijderen
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                    {/* Action icons */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => handleEdit(question)}
+                        className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                        title="Bewerken"
+                      >
+                        <Pencil size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(question)}
+                        className="p-2 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                        title="Verwijderen"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </>
@@ -902,7 +882,18 @@ export default function CampaignDetailPage({ params }: PageProps) {
                   onChange={() => setFormData({ ...formData, type: 'open' })}
                   className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500"
                 />
-                <span className="text-sm text-slate-700">Open vraag (open vraag)</span>
+                <span className="text-sm text-slate-700">Open vraag</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="type"
+                  value="quiz"
+                  checked={formData.type === 'quiz'}
+                  onChange={() => setFormData({ ...formData, type: 'quiz' })}
+                  className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500"
+                />
+                <span className="text-sm text-slate-700">Quiz (tekstveld)</span>
               </label>
             </div>
           </div>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, MoreVertical, Pencil, Trash2, ChevronRight, MessageSquare } from 'lucide-react';
+import { Plus, MoreVertical, Pencil, Trash2, MessageSquare } from 'lucide-react';
 import { getCampaigns, deleteCampaign, createCampaignAdmin, updateCampaign, getCampaignStats, type Campaign } from '@/lib/firebase-admin';
 import Modal from '@/components/admin/Modal';
 import ConfirmModal from '@/components/admin/ConfirmModal';
@@ -107,24 +107,6 @@ export default function CampaignsPage() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const styles = {
-      draft: 'bg-slate-100 text-slate-600',
-      active: 'bg-green-100 text-green-700',
-      completed: 'bg-blue-100 text-blue-700',
-    };
-    const labels = {
-      draft: 'Concept',
-      active: 'Actief',
-      completed: 'Afgerond',
-    };
-    return (
-      <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${styles[status as keyof typeof styles] || styles.draft}`}>
-        {labels[status as keyof typeof labels] || status}
-      </span>
-    );
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -171,10 +153,10 @@ export default function CampaignsPage() {
           {campaigns.map((campaign) => (
             <div
               key={campaign.id}
-              className="bg-white border border-slate-200 rounded-xl p-6 hover:shadow-md hover:border-indigo-200 transition-all group relative"
+              className="bg-white border border-slate-200 rounded-xl hover:shadow-md hover:border-indigo-200 transition-all group relative flex flex-col"
             >
               {/* Dropdown Menu */}
-              <div className="absolute top-4 right-4">
+              <div className="absolute top-3 right-3">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -205,11 +187,7 @@ export default function CampaignsPage() {
                 )}
               </div>
 
-              <Link href={`/admin/campaigns/${campaign.id}`}>
-                <div className="mb-4">
-                  {getStatusBadge(campaign.status)}
-                </div>
-
+              <Link href={`/admin/campaigns/${campaign.id}`} className="flex flex-col flex-1 p-6">
                 <h3 className="text-lg font-semibold text-slate-900 mb-2 group-hover:text-indigo-600 transition-colors">
                   {campaign.name}
                 </h3>
@@ -218,17 +196,17 @@ export default function CampaignsPage() {
                   <p className="text-sm text-slate-500 mb-4 line-clamp-2">{campaign.description}</p>
                 )}
 
-                <div className="flex items-center gap-4 text-sm text-slate-500 mt-4 pt-4 border-t border-slate-100">
+                <div className="flex items-center gap-4 text-sm text-slate-500 mt-auto pt-4">
                   <span>{campaign.questionCount || 0} vragen</span>
                   <span className="text-slate-300">•</span>
                   <span>{campaign.totalResponses || 0} responses</span>
                 </div>
-
-                <div className="flex items-center gap-1 text-indigo-600 text-sm font-medium mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                  Bekijk details
-                  <ChevronRight size={16} />
-                </div>
               </Link>
+
+              <div className="px-6 py-3 bg-slate-50 rounded-b-xl border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+                <span>Aangemaakt {new Date(campaign.createdAt).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                <span>{new Date(campaign.createdAt).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
             </div>
           ))}
         </div>

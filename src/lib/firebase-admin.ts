@@ -14,7 +14,7 @@ export interface QuestionOption {
 export interface Question {
   id: string;
   title: string;
-  type: "poll" | "open" | "multi" | "multi";
+  type: "poll" | "open" | "multi" | "quiz";
   options: QuestionOption[];
   isProfileQuestion: boolean;
   profileField: string | null;
@@ -117,7 +117,7 @@ export async function createQuestion(
   campaignId: string,
   data: {
     title: string;
-    type: "poll" | "open" | "multi";
+    type: "poll" | "open" | "multi" | "quiz";
     options?: { label: string }[];
     isProfileQuestion?: boolean;
     profileField?: string;
@@ -125,7 +125,7 @@ export async function createQuestion(
 ): Promise<string> {
   // Get current questions to determine order
   const questions = await getQuestions(campaignId);
-  const nextOrder = questions.length > 0 ? Math.max(...questions.map(q => q.order)) + 1 : 0;
+  const nextOrder = questions.length > 0 ? Math.max(...questions.map(q => q.order ?? 0)) + 1 : 0;
 
   const questionId = `q_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
   const questionRef = ref(database, `/nova-vote/campaigns/${campaignId}/questions/${questionId}`);
@@ -156,7 +156,7 @@ export async function updateQuestion(
   questionId: string,
   data: {
     title?: string;
-    type?: "poll" | "open" | "multi";
+    type?: "poll" | "open" | "multi" | "quiz";
     options?: QuestionOption[];
     isProfileQuestion?: boolean;
     profileField?: string | null;

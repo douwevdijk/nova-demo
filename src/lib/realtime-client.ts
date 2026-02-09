@@ -1289,6 +1289,8 @@ export class RealtimeClient {
       const questionId = `open_${Date.now()}`;
       this.currentQuestionId = questionId;
 
+      const seedAnswers = proposal.seedAnswers || this.generateLocalSeedAnswers(proposal.question);
+
       try {
         // 1. Create question in Firebase
         await createQuestion(this.campaignId, questionId, {
@@ -1301,15 +1303,19 @@ export class RealtimeClient {
         await setQuestionActive(this.campaignId, questionId);
 
         // 3. Add seed answers
-        const seedAnswers = proposal.seedAnswers || this.generateLocalSeedAnswers(proposal.question);
         await addSeedAnswers(this.campaignId, questionId, seedAnswers);
       } catch (error) {
         console.error("Failed to create open vraag in Firebase:", error);
         // Continue with local results
       }
 
-      // Generate words and deep dive, show DIRECTLY
-      const words = this.generateOpenVraagWords(proposal.question);
+      // Bouw words uit seedAnswers ipv hardcoded keyword-matching
+      const usedNames = new Set<string>();
+      const words: OpenAnswer[] = seedAnswers.map(text => ({
+        text,
+        count: Math.floor(Math.random() * 3) + 1,
+        name: this.getRandomName(usedNames),
+      }));
       const deepDive = this.generateOpenVraagDeepDive(proposal.question, words);
 
       this.currentOpenVraag = {
@@ -1970,7 +1976,9 @@ export class RealtimeClient {
 
       // Custom instructions voor results functies
       if (functionName === "get_poll_results" || functionName === "get_wordcloud_results") {
-        const instructions = "ZOOM IN op deze resultaten! Wat valt op? Wat is verrassend? Vergelijk de uitkomsten. Lees niet de percentages op, maar trek meteen een pakkende conclusie ( benoem niet specifiek dat je een conclusie trekt ). Maak het spannend!";
+        const instructions = functionName === "get_wordcloud_results"
+          ? "Bespreek ALLEEN antwoorden die in de data staan — verzin NIETS. Benoem thema's en patronen, geen ranking. Trek een korte conclusie. Maak het levendig!"
+          : "ZOOM IN op deze resultaten! Wat valt op? Wat is verrassend? Vergelijk de uitkomsten. Lees niet de percentages op, maar trek meteen een pakkende conclusie ( benoem niet specifiek dat je een conclusie trekt ). Maak het spannend!";
 
         this.dataChannel!.send(JSON.stringify({
           type: "response.create",
