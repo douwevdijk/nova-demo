@@ -315,7 +315,7 @@ export function subscribeToActiveQuestionResults(
   questionId: string,
   questionType: "poll" | "open",
   options: string[] | undefined,
-  callback: (data: { seedVotes?: { option: string; count: number }[]; seedAnswers?: string[] }) => void
+  callback: (data: { seedVotes?: { option: string; count: number }[]; seedAnswers?: { text: string; name: string }[] }) => void
 ): () => void {
   const resultsRef = ref(database, `/nova-vote/results/${campaignId}/${questionId}`);
 
@@ -338,11 +338,11 @@ export function subscribeToActiveQuestionResults(
       callback({ seedVotes });
     } else {
       // Collect answers for open question
-      const seedAnswers: string[] = [];
+      const seedAnswers: { text: string; name: string }[] = [];
       Object.values(results).forEach((answer: unknown) => {
-        const a = answer as { answer?: string };
+        const a = answer as { answer?: string; userName?: string };
         if (a.answer) {
-          seedAnswers.push(a.answer);
+          seedAnswers.push({ text: a.answer, name: a.userName || "Anoniem" });
         }
       });
       callback({ seedAnswers });

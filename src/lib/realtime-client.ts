@@ -1392,6 +1392,7 @@ export class RealtimeClient {
           question: activeData.question.title,
           showResults: true,
           words,
+          deepDive: this.currentOpenVraag?.deepDive,
         };
         this.currentQuestionId = activeData.question.id;
 

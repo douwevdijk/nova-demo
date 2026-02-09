@@ -664,7 +664,7 @@ export function NovaConversation() {
         // Convert to our format
         const results = {
           votes: data.seedVotes,
-          answers: data.seedAnswers?.map(text => ({ text, name: undefined })),
+          answers: data.seedAnswers?.map(a => ({ text: a.text, name: a.name })),
         };
         console.log("[Firebase] Results updated for question:", activeQuestion.id);
         setActiveQuestionResults(results);
