@@ -954,11 +954,11 @@ export function NovaConversation() {
       notification += `TYPE: POLL\n`;
       notification += `VRAAG: "${activeQuestion.title}"\n`;
       notification += `OPTIES: ${JSON.stringify(activeQuestion.options)}\n`;
-      notification += `\nALS RENS VRAAGT OM DEZE VRAAG TE TONEN → gebruik propose_poll met EXACT deze vraag. ALS RENS OM EEN ANDERE/NIEUWE VRAAG VRAAGT → maak gewoon een nieuwe.`;
+      notification += `\nDit is puur informatief. Reageer hier NIET op. Als Rens om een vraag/poll vraagt, roep METEEN propose_poll/propose_open_vraag aan.`;
     } else {
       notification += `TYPE: OPEN VRAAG\n`;
       notification += `VRAAG: "${activeQuestion.title}"\n`;
-      notification += `\nALS RENS VRAAGT OM DEZE VRAAG TE TONEN → gebruik propose_open_vraag met EXACT deze vraag. ALS RENS OM EEN ANDERE/NIEUWE VRAAG VRAAGT → maak gewoon een nieuwe.`;
+      notification += `\nDit is puur informatief. Reageer hier NIET op. Als Rens om een vraag/poll vraagt, roep METEEN propose_poll/propose_open_vraag aan.`;
     }
 
     clientRef.current.sendSilentConversationEvent(notification);
