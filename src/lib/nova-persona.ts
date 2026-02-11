@@ -174,7 +174,7 @@ PREAMBLE: Maak het spannend:
 - "Ik ben benieuwd of de Randstad anders denkt dan de rest..."
 - "Even checken of IT'ers hier anders over denken..."
 
-NA de tool: VERTEL HET VERHAAL van de data:
+NA de tool: VERTEL HET VERHAAL van de data. Roep GEEN andere tools aan (geen show_summary, geen get_poll_results, NIETS). Gewoon praten!
 - Welke regio/profiel wijkt af?
 - Waarom zou dat zijn?
 - Wat betekent dit?

@@ -31,26 +31,34 @@ const CARD_COLORS = ["#f30349", "#3b82f6", "#a78bfa", "#f59e0b"];
 export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepDiveDisplayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [visibleRegions, setVisibleRegions] = useState(0);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     if (data && containerRef.current) {
+      setIsReady(false);
       gsap.fromTo(
         containerRef.current,
         { opacity: 0, scale: 0.95, y: 30 },
         { opacity: 1, scale: 1, y: 0, duration: 0.5, ease: "power3.out" }
       );
 
-      if (mode === "regions") {
-        // Stagger regions appearing on map
-        setVisibleRegions(0);
-        let count = 0;
-        const interval = setInterval(() => {
-          count++;
-          setVisibleRegions(count);
-          if (count >= data.regions.length) clearInterval(interval);
-        }, 400);
-        return () => clearInterval(interval);
-      }
+      let intervalId: ReturnType<typeof setInterval> | undefined;
+      const timer = setTimeout(() => {
+        setIsReady(true);
+        if (mode === "regions") {
+          setVisibleRegions(0);
+          let count = 0;
+          intervalId = setInterval(() => {
+            count++;
+            setVisibleRegions(count);
+            if (count >= data.regions.length) clearInterval(intervalId!);
+          }, 400);
+        }
+      }, 800);
+      return () => {
+        clearTimeout(timer);
+        if (intervalId) clearInterval(intervalId);
+      };
     }
   }, [data, mode]);
 
@@ -101,6 +109,37 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
           ×
         </button>
 
+        {!isReady ? (
+          <div style={{
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            minHeight: "300px",
+            gap: "24px",
+          }}>
+            <div style={{
+              width: "56px",
+              height: "56px",
+              borderRadius: "50%",
+              border: "3px solid rgba(243, 3, 73, 0.15)",
+              borderTopColor: "#f30349",
+              animation: "deepDiveSpin 0.8s linear infinite",
+              boxShadow: "0 0 30px rgba(243, 3, 73, 0.2)",
+            }} />
+            <span style={{
+              color: "rgba(255, 255, 255, 0.4)",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              letterSpacing: "6px",
+              textTransform: "uppercase",
+            }}>
+              ANALYSEREN...
+            </span>
+          </div>
+        ) : (
+          <div style={{ animation: "deepDiveFadeIn 0.4s ease-out" }}>
+
         {/* Header */}
         <div style={{ marginBottom: "24px" }}>
           <span
@@ -128,7 +167,7 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
         {/* REGIONS MODE: Netherlands Map - full width, no stats sidebar */}
         {mode === "regions" && (
           <div>
-            <div style={{ position: "relative", width: "100%", maxWidth: "560px", aspectRatio: "580 / 616", margin: "0 auto" }}>
+            <div style={{ position: "relative", width: "100%", maxWidth: "800px", aspectRatio: "580 / 616", margin: "0 auto" }}>
               {/* Netherlands SVG - visible outlines */}
               <img
                 src="/netherlands.svg"
@@ -205,6 +244,11 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
                       <div style={{ color: "white", fontSize: "1.1rem", fontWeight: 700, marginTop: "2px" }}>
                         {winner.option}: {winner.percentage}%
                       </div>
+                      {region.results.slice(1).map((r, i) => (
+                        <div key={i} style={{ color: "rgba(255,255,255,0.35)", fontSize: "0.75rem", marginTop: "1px" }}>
+                          {r.option}: {r.percentage}%
+                        </div>
+                      ))}
                       <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.7rem", marginTop: "2px" }}>
                         {region.totalVotes} stemmen
                       </div>
@@ -295,7 +339,10 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
             <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#22c55e", boxShadow: "0 0 10px #22c55e" }} />
             <span style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.4)" }}>Live</span>
           </div>
+
+          </div>
         </div>
+        )}
       </div>
 
       <style jsx global>{`
@@ -311,6 +358,13 @@ export function PollDeepDiveDisplay({ data, question, mode, onClose }: PollDeepD
         @keyframes regionPulse {
           0% { transform: translate(-50%, -50%) scale(1); opacity: 0.4; }
           100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
+        }
+        @keyframes deepDiveSpin {
+          to { transform: rotate(360deg); }
+        }
+        @keyframes deepDiveFadeIn {
+          from { opacity: 0; transform: translateY(12px); }
+          to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
     </div>

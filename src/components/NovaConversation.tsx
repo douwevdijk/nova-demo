@@ -489,6 +489,7 @@ export function NovaConversation() {
   const [currentPoll, setCurrentPoll] = useState<PollData | null>(null);
   const [isThinking, setIsThinking] = useState(false);
   const [thinkingMessage, setThinkingMessage] = useState("");
+  const deepDiveLoadingRef = useRef(false);
   const [showVisualizer, setShowVisualizer] = useState(false);
   const [webSearch, setWebSearch] = useState<WebSearchData | null>(null);
   const [openVraag, setOpenVraag] = useState<OpenVraagData | null>(null);
@@ -774,6 +775,7 @@ export function NovaConversation() {
         }
       },
       onFunctionCallEnd: () => {
+        if (deepDiveLoadingRef.current) return; // deep dive timeout handles clearing
         setIsThinking(false);
         setThinkingMessage("");
       },
@@ -838,13 +840,25 @@ export function NovaConversation() {
       },
       onPollDeepDiveRegions: (data) => {
         console.log("Poll deep dive regions:", data);
+        deepDiveLoadingRef.current = true;
         setActiveModal("polldeep-regions");
         setPollDeepDive(data);
+        setTimeout(() => {
+          deepDiveLoadingRef.current = false;
+          setIsThinking(false);
+          setThinkingMessage("");
+        }, 800);
       },
       onPollDeepDiveProfiles: (data) => {
         console.log("Poll deep dive profiles:", data);
+        deepDiveLoadingRef.current = true;
         setActiveModal("polldeep-profiles");
         setPollDeepDive(data);
+        setTimeout(() => {
+          deepDiveLoadingRef.current = false;
+          setIsThinking(false);
+          setThinkingMessage("");
+        }, 800);
       },
     });
 

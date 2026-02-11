@@ -762,7 +762,6 @@ export class RealtimeClient {
     winner: string;
     winnerPercentage: number;
     summary: string;
-    deepDive: PollDeepDive;
   } | null = null;
 
   private executeProposePoll(argsJson: string): string {
@@ -868,14 +867,33 @@ export class RealtimeClient {
     return results;
   }
 
-  // Generate full poll results with region & profile breakdowns
+  // Generate perturbed votes based on actual percentages + noise
+  private perturbedVotes(options: string[], basePercentages: number[], totalVotes: number, noisePP: number): PollResultItem[] {
+    // Add random noise to each base percentage
+    const noisy = basePercentages.map(p => Math.max(1, p + (Math.random() * 2 - 1) * noisePP));
+    const sum = noisy.reduce((s, v) => s + v, 0);
+    // Normalise to totalVotes
+    const votes: number[] = noisy.map(n => Math.max(1, Math.round((n / sum) * totalVotes)));
+    // Fix rounding to match totalVotes exactly
+    const diff = totalVotes - votes.reduce((s, v) => s + v, 0);
+    if (votes.length > 0) votes[0] += diff;
+
+    const results: PollResultItem[] = options.map((option, i) => ({
+      option,
+      votes: votes[i],
+      percentage: Math.round((votes[i] / totalVotes) * 100),
+    }));
+    results.sort((a, b) => b.votes - a.votes);
+    return results;
+  }
+
+  // Generate overall poll results (no deep dive — that's generated lazily on demand)
   private generatePollResults(options: string[]): {
     results: PollResultItem[];
     totalVotes: number;
     winner: string;
     winnerPercentage: number;
     summary: string;
-    deepDive: PollDeepDive;
   } {
     const totalVotes = this.randomCount(120, 220);
     const results = this.generateVotes(options, totalVotes);
@@ -884,18 +902,29 @@ export class RealtimeClient {
       .map(r => `"${r.option}": ${r.votes} stemmen (${r.percentage}%)`)
       .join(", ");
 
-    // Generate region breakdowns
+    return {
+      results,
+      totalVotes,
+      winner: winner.option,
+      winnerPercentage: winner.percentage,
+      summary,
+    };
+  }
+
+  // Generate deep dive from actual poll results (lazy, on-demand)
+  private generateDeepDiveFromResults(options: string[], percentages: number[]): PollDeepDive {
+    // Generate region breakdowns with high variation (±18pp)
     const regions = ["Randstad", "Noord", "Zuid", "Oost"];
     const regionBreakdowns: RegionBreakdown[] = regions.map(region => {
       const regionVotes = this.randomCount(25, 65);
       return {
         region,
-        results: this.generateVotes(options, regionVotes),
+        results: this.perturbedVotes(options, percentages, regionVotes, 18),
         totalVotes: regionVotes,
       };
     });
 
-    // Generate profile breakdowns
+    // Generate profile breakdowns close to overall (±6pp)
     const profiles = ["Management", "HR & Talent", "IT & Tech", "Marketing & Sales"];
     const profileCharacterInsights: Record<string, string[]> = {
       "Management": [
@@ -930,7 +959,7 @@ export class RealtimeClient {
 
     const profileBreakdowns: ProfileBreakdown[] = profiles.map(profile => {
       const profileVotes = this.randomCount(20, 60);
-      const profileResults = this.generateVotes(options, profileVotes);
+      const profileResults = this.perturbedVotes(options, percentages, profileVotes, 6);
       const winner = profileResults[0];
       const loser = profileResults[profileResults.length - 1];
       const characterPool = profileCharacterInsights[profile] || [];
@@ -950,58 +979,26 @@ export class RealtimeClient {
       };
     });
 
-    // Generate overall profile insight
     const overallProfileInsight = this.generateOverallProfileInsight(profileBreakdowns);
 
-    // Generate insights
-    const topRegion = regionBreakdowns.reduce((best, r) => {
-      const topPct = r.results[0].percentage;
-      return topPct > (best.results[0]?.percentage || 0) ? r : best;
-    });
-    const topProfile = profileBreakdowns.reduce((best, p) => {
-      const topPct = p.results[0].percentage;
-      return topPct > (best.results[0]?.percentage || 0) ? p : best;
-    });
-
-    // Find the region with most different winner
-    const mainWinner = results[0].option;
-    const differentRegion = regionBreakdowns.find(r => r.results[0].option !== mainWinner);
-    const lowestRegion = regionBreakdowns.reduce((lowest, r) => {
-      const winnerResult = r.results.find(res => res.option === mainWinner);
-      const lowestResult = lowest.results.find(res => res.option === mainWinner);
-      return (winnerResult?.percentage || 0) < (lowestResult?.percentage || 0) ? r : lowest;
-    });
-
-    const insights = [
-      `In de regio ${topRegion.region} scoort "${topRegion.results[0].option}" het hoogst met ${topRegion.results[0].percentage}% — dat is opvallend hoger dan het gemiddelde.`,
-      `${topProfile.profile} kiest het vaakst voor "${topProfile.results[0].option}" (${topProfile.results[0].percentage}%), terwijl andere profielen diverser stemmen.`,
-      differentRegion
-        ? `Interessant: in ${differentRegion.region} wint juist "${differentRegion.results[0].option}" — een ander beeld dan het totaal.`
-        : `Alle regio's kiezen voor "${mainWinner}" — een heel eenduidig signaal.`,
-      `De regio ${lowestRegion.region} scoort het laagst op "${mainWinner}" met slechts ${lowestRegion.results.find(r => r.option === mainWinner)?.percentage || 0}% — hier ligt mogelijk een pijnpunt of kans.`,
-    ];
-
     return {
-      results,
-      totalVotes,
-      winner: winner.option,
-      winnerPercentage: winner.percentage,
-      summary,
-      deepDive: {
-        regions: regionBreakdowns,
-        profiles: profileBreakdowns,
-        insights,
-        overallProfileInsight,
-      },
+      regions: regionBreakdowns,
+      profiles: profileBreakdowns,
+      insights: [],
+      overallProfileInsight,
     };
   }
 
   private async executeAnalyzePollDeep(mode: "regions" | "profiles"): Promise<string> {
-    if (!this.currentPoll || !this.currentPoll.deepDive) {
-      return JSON.stringify({ error: "Geen actieve poll met deep dive data gevonden" });
+    if (!this.currentPoll?.results) {
+      return JSON.stringify({ error: "Geen actieve poll met resultaten gevonden" });
     }
 
-    const deepDive = this.currentPoll.deepDive;
+    // Generate deep dive on-demand from actual results
+    const options = this.currentPoll.results.map(r => r.option);
+    const percentages = this.currentPoll.results.map(r => r.percentage);
+    const deepDive = this.generateDeepDiveFromResults(options, percentages);
+    this.currentPoll.deepDive = deepDive;
 
     // Notify UI to show the right view
     if (mode === "regions" && this.config.onPollDeepDiveRegions) {
@@ -1013,26 +1010,26 @@ export class RealtimeClient {
 
     // Build summaries for AI
     const regionSummaries = deepDive.regions.map(r => {
-      const top = r.results[0];
-      return `${r.region} (${r.totalVotes} stemmen): #1 "${top.option}" ${top.percentage}%`;
+      const allOpts = r.results.map(o => `"${o.option}" ${o.percentage}%`).join(", ");
+      return `${r.region} (${r.totalVotes} stemmen): ${allOpts}`;
     }).join(" | ");
 
     const profileSummaries = deepDive.profiles.map(p => {
-      const top = p.results[0];
-      return `${p.profile} (${p.totalVotes} stemmen): #1 "${top.option}" ${top.percentage}%`;
+      const allOpts = p.results.map(o => `"${o.option}" ${o.percentage}%`).join(", ");
+      return `${p.profile} (${p.totalVotes} stemmen): ${allOpts}`;
     }).join(" | ");
 
     // Compact return: UI already has full data via onPollDeepDiveRegions/Profiles callbacks
     if (mode === "regions") {
       return JSON.stringify({
         success: true,
-        message: `Regio-analyse: ${regionSummaries}. ${deepDive.insights[0]}`,
+        message: `Regio-analyse: ${regionSummaries}`,
       });
     }
 
     return JSON.stringify({
       success: true,
-      message: `Profiel-analyse: ${profileSummaries}. ${deepDive.insights[1]}`,
+      message: `Profiel-analyse: ${profileSummaries}`,
     });
   }
 
@@ -1077,11 +1074,6 @@ export class RealtimeClient {
         };
         this.currentQuestionId = activeData.question.id;
 
-        // Keep deep dive from pre-generated data if available
-        if (this.pendingPollResults) {
-          this.currentPoll.deepDive = this.pendingPollResults.deepDive;
-        }
-
         // Notify UI to show results
         if (this.config.onPollResults) {
           this.config.onPollResults(this.currentPoll);
@@ -1099,16 +1091,15 @@ export class RealtimeClient {
 
     // Fallback: check if we have currentPoll from earlier
     if (!this.currentPoll) {
-      return JSON.stringify({ error: "Geen actieve poll gevonden" });
+      return JSON.stringify({ error: "Geen actieve poll gevonden. Stel zelf een poll voor met propose_poll!" });
     }
 
     // Fallback to pre-generated results
     if (!this.pendingPollResults) {
-      return JSON.stringify({ error: "Geen resultaten beschikbaar" });
+      return JSON.stringify({ error: "Geen resultaten beschikbaar. Stel een nieuwe poll voor met propose_poll!" });
     }
 
     this.currentPoll.results = this.pendingPollResults.results;
-    this.currentPoll.deepDive = this.pendingPollResults.deepDive;
 
     if (this.config.onPollResults) {
       this.config.onPollResults(this.currentPoll);
@@ -1270,7 +1261,6 @@ export class RealtimeClient {
         question: proposal.question,
         options,
         results: this.pendingPollResults.results,
-        deepDive: this.pendingPollResults.deepDive,
       };
 
       if (this.config.onPollResults) {
@@ -1315,13 +1305,11 @@ export class RealtimeClient {
         count: Math.floor(Math.random() * 3) + 1,
         name: this.getRandomName(usedNames),
       }));
-      const deepDive = this.generateOpenVraagDeepDive(proposal.question, words);
 
       this.currentOpenVraag = {
         question: proposal.question,
         showResults: true,
         words,
-        deepDive,
       };
 
       if (this.config.onOpenVraagResults) {
@@ -1389,7 +1377,6 @@ export class RealtimeClient {
       question: questionTitle || "",
       showResults: true,
       words,
-      deepDive: this.currentOpenVraag?.deepDive,
     };
     this.currentQuestionId = questionId;
 
@@ -1823,11 +1810,13 @@ export class RealtimeClient {
   }
 
   private async executeAnalyzeOpenVraagDeep(): Promise<string> {
-    if (!this.currentOpenVraag || !this.currentOpenVraag.deepDive) {
-      return JSON.stringify({ error: "Geen actieve open vraag met deep dive data gevonden" });
+    if (!this.currentOpenVraag?.words) {
+      return JSON.stringify({ error: "Geen actieve open vraag met antwoorden gevonden" });
     }
 
-    const deepDive = this.currentOpenVraag.deepDive;
+    // Generate deep dive on-demand from actual answers
+    const deepDive = this.generateOpenVraagDeepDive(this.currentOpenVraag.question, this.currentOpenVraag.words);
+    this.currentOpenVraag.deepDive = deepDive;
     const question = this.currentOpenVraag.question;
 
     // Notify UI
@@ -1952,14 +1941,16 @@ export class RealtimeClient {
       if (!this.dataChannel || this.dataChannel.readyState !== "open") return;
 
       // Custom instructions voor results functies
-      if (functionName === "get_poll_results" || functionName === "get_wordcloud_results" || functionName === "confirm_question") {
+      if (functionName === "get_poll_results" || functionName === "get_wordcloud_results" || functionName === "confirm_question" || functionName === "analyze_poll_regions" || functionName === "analyze_poll_profiles") {
         let instructions: string;
         if (functionName === "get_wordcloud_results") {
-          instructions = "Bespreek ALLEEN antwoorden die in de data staan — verzin NIETS. Lees NIET elk antwoord op. Benoem thema's en patronen, noem hooguit 2-3 opvallende antwoorden bij naam. Trek een korte conclusie. Maak het levendig!";
+          instructions = "Bespreek ALLEEN antwoorden die in de data staan — verzin NIETS. Lees NIET elk antwoord op. Benoem thema's en patronen, noem hooguit 2-3 opvallende antwoorden bij naam. Trek een korte conclusie. Maak het levendig! Roep GEEN andere tools aan. Gewoon praten!";
         } else if (functionName === "confirm_question") {
           instructions = "Je hebt de data teruggekregen. PRAAT erover — noem 2-3 opvallende antwoorden bij naam, spot thema's, trek een conclusie. Roep GEEN andere tools aan. Gewoon praten!";
+        } else if (functionName === "analyze_poll_regions" || functionName === "analyze_poll_profiles") {
+          instructions = "Je krijgt de volledige data per regio/profiel. Lees NIET alle percentages op. Benoem 1-2 opvallende verschillen, duid wat het betekent. Maak het spannend en kort. Roep GEEN andere tools aan (geen show_summary, geen get_poll_results, NIETS). Gewoon praten!";
         } else {
-          instructions = "ZOOM IN op deze resultaten! Wat valt op? Wat is verrassend? Vergelijk de uitkomsten. Lees niet de percentages op, maar trek meteen een pakkende conclusie ( benoem niet specifiek dat je een conclusie trekt ). Maak het spannend!";
+          instructions = "Bespreek deze resultaten! Wat valt op? Wat is verrassend? Vergelijk de uitkomsten. Lees niet de percentages op, maar trek meteen een pakkende conclusie. Maak het spannend! Roep GEEN andere tools aan (geen analyze_poll_regions, geen show_summary, NIETS). Gewoon praten!";
         }
 
         this.dataChannel!.send(JSON.stringify({
