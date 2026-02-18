@@ -36,7 +36,7 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
   const totalVotes = poll?.results?.reduce((a, b) => a + b.votes, 0) || 0;
 
   // Create a unique ID that includes whether results exist
-  const pollId = poll ? `${poll.question}-${poll.options.join("-")}-${hasResults ? "results" : "options"}` : null;
+  const pollId = poll ? `${poll.question}-${(poll.options || []).join("-")}-${hasResults ? "results" : "options"}` : null;
 
   // Reset when poll changes OR when results appear
   useEffect(() => {
