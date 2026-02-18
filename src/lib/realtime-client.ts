@@ -1718,7 +1718,9 @@ export class RealtimeClient {
         console.log("Image API response status:", res.status);
         if (!res.ok) {
           return res.text().then(text => {
-            throw new Error(`API error ${res.status}: ${text}`);
+            const err = new Error(`API error ${res.status}: ${text}`);
+            (err as any).status = res.status;
+            throw err;
           });
         }
         return res.json();
@@ -1745,7 +1747,12 @@ export class RealtimeClient {
         if (this.config.onImageError) {
           this.config.onImageError(err.message || "Image generation failed");
         }
-        this.sendConversationEvent("Het image genereren is helaas mislukt. Vertel Rens dat het niet gelukt is en bied aan om het opnieuw te proberen.");
+        const isTemporary = (err as any).status === 503;
+        if (isTemporary) {
+          this.sendConversationEvent("Het image genereren is mislukt door een tijdelijk probleem. Vertel Rens dat het even niet lukte en bied aan om het over een minuutje opnieuw te proberen.");
+        } else {
+          this.sendConversationEvent("Het image genereren is helaas mislukt. Vertel Rens dat het niet gelukt is en bied aan om het opnieuw te proberen.");
+        }
       });
 
     // Return immediately - don't block the conversation
