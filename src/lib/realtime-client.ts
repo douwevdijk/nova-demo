@@ -4,7 +4,6 @@ import {
   addSeedVotes,
   addSeedAnswers,
   getResults,
-  deactivateQuestion,
   setQuestionActive,
 } from "./firebase";
 import { QuestionManager } from "./question-manager";
@@ -28,6 +27,23 @@ export interface FunctionCall {
   name: string;
   call_id: string;
   arguments: string;
+}
+
+export interface ContextUsage {
+  totalTokens: number;
+  maxTokens: number;
+  percent: number;
+  cacheRatio: number;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+export interface ConversationItem {
+  id: string;
+  type: string;        // "message" | "function_call" | "function_call_output"
+  name?: string;       // function name if type=function_call
+  role?: string;       // "user" | "assistant" | "system"
+  tokens?: number;     // estimated tokens
 }
 
 export interface PollResultItem {
@@ -107,6 +123,9 @@ export interface SeatAllocationData {
   results: { option: string; percentage: number; seats: number }[];
 }
 
+export interface QuizQuestion { text: string; answer: string; background: string; }
+export interface QuizData { topic: string; questions: QuizQuestion[]; currentIndex: number; answerRevealed: boolean; results: (boolean | null)[]; showSummary: boolean; }
+
 export interface RealtimeClientConfig {
   campaignId: string;
   questionManager?: QuestionManager;
@@ -133,6 +152,12 @@ export interface RealtimeClientConfig {
   onShowImage?: (data: NovaImageData) => void;
   onImageError?: (error: string) => void;
   onSeatAllocation?: (data: SeatAllocationData) => void;
+  onQuizGenerating?: () => void;
+  onQuizReady?: () => void;
+  onQuizUpdate?: (data: QuizData) => void;
+  onQuizEnd?: () => void;
+  onContextUsage?: (usage: ContextUsage) => void;
+  onConversationItemsChange?: (items: ConversationItem[]) => void;
 }
 
 // Keep backwards compatibility
@@ -154,7 +179,10 @@ export class RealtimeClient {
   private currentPoll: PollData | null = null;
   private currentOpenVraag: OpenVraagData | null = null;
   private activeResponseId: string | null = null;
-  private pendingResponseCreate: (() => void)[] = [];
+  // Event-driven: pending conversation event to send after response.done
+  private pendingConversationEvent: (() => void) | null = null;
+  // Track how many function results are still pending in current response
+  private pendingFunctionResultCount: number = 0;
 
   // Timeout for ICE disconnected → error transition
   private disconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -167,11 +195,16 @@ export class RealtimeClient {
     seedVotes?: { option: string; count: number }[];
   } | null = null;
 
+  private pendingQuiz: QuizData | null = null;
+  private presenterName: string = "Rens";
+
   // Current question tracking for Firebase
   private currentQuestionId: string | null = null;
 
   // Track pending function calls (from output_item.added until arguments.done)
   private pendingFunctionCalls: Map<string, { name: string; itemId: string }> = new Map();
+
+  private conversationItems: ConversationItem[] = [];
 
   constructor(config: RealtimeClientConfig) {
     this.config = config;
@@ -183,7 +216,7 @@ export class RealtimeClient {
     return this.config.campaignId;
   }
 
-  async connect(sessionContext?: { context?: string }): Promise<void> {
+  async connect(sessionContext?: { context?: string; presenterName?: string }): Promise<void> {
     try {
       this.setConnectionState("connecting");
 
@@ -193,6 +226,7 @@ export class RealtimeClient {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           context: sessionContext?.context || "",
+          presenterName: sessionContext?.presenterName,
         }),
       });
 
@@ -203,6 +237,10 @@ export class RealtimeClient {
       }
 
       const { client_secret } = await tokenResponse.json();
+
+      if (sessionContext?.presenterName) {
+        this.presenterName = sessionContext.presenterName;
+      }
 
       // Get microphone access
       this.localStream = await navigator.mediaDevices.getUserMedia({
@@ -461,6 +499,7 @@ export class RealtimeClient {
         console.log("Response cancelled (interrupted)");
         this.activeResponseId = null;
         this.pendingFunctionCalls.clear();
+        this.pendingFunctionResultCount = 0;
         this.setNovaState("listening");
         break;
 
@@ -474,6 +513,7 @@ export class RealtimeClient {
 
           // Track this pending function call
           this.pendingFunctionCalls.set(itemId, { name, itemId });
+          this.pendingFunctionResultCount++;
 
           // Notify UI immediately that function call started
           if (this.config.onFunctionCallStart) {
@@ -520,10 +560,11 @@ export class RealtimeClient {
         this.handleResponseDone(event);
         if (!hasFunctionCalls) {
           this.setNovaState("listening");
-          // Process any queued response.create requests with delay
-          if (this.pendingResponseCreate.length > 0) {
-            const next = this.pendingResponseCreate.shift();
-            if (next) setTimeout(next, 300);
+          // Process any pending conversation event that was waiting for Nova to finish
+          if (this.pendingConversationEvent) {
+            const fn = this.pendingConversationEvent;
+            this.pendingConversationEvent = null;
+            setTimeout(fn, 300);
           }
         }
         break;
@@ -534,12 +575,59 @@ export class RealtimeClient {
         // Just log, no action needed
         break;
 
-      case "error":
+      case "error": {
         const errorData = event.error as Record<string, string> | undefined;
         const errorMessage = errorData?.message || "Unknown error";
-        console.error("Server error:", errorMessage);
-        this.config.onError(errorMessage);
+        // Don't propagate "Item not found" errors from delete attempts to UI
+        if (errorMessage.includes("does not exist") || errorMessage.includes("not found")) {
+          console.warn("Server error (ignored):", errorMessage);
+        } else {
+          console.error("Server error:", errorMessage);
+          this.config.onError(errorMessage);
+        }
         break;
+      }
+
+      case "conversation.item.deleted": {
+        const deletedId = event.item_id as string;
+        this.conversationItems = this.conversationItems.filter(i => i.id !== deletedId);
+        this.config.onConversationItemsChange?.([...this.conversationItems]);
+        break;
+      }
+
+      case "conversation.item.created": {
+        const createdItem = event.item as Record<string, unknown> | undefined;
+        if (createdItem) {
+          const id = createdItem.id as string;
+          const type = createdItem.type as string;
+          const role = (createdItem.role as string) || undefined;
+          // Already tracked by server ID? Skip.
+          if (this.conversationItems.find(i => i.id === id)) break;
+
+          if (type === "function_call_output") {
+            // Match placeholder fco_<callId> → real server ID
+            const callId = createdItem.call_id as string;
+            const placeholder = this.conversationItems.find(i => i.id === `fco_${callId}`);
+            if (placeholder) {
+              placeholder.id = id;
+            } else {
+              this.conversationItems.push({ id, type, tokens: 0 });
+            }
+          } else if (type === "message") {
+            // Match oldest placeholder msg_* → real server ID
+            const placeholder = this.conversationItems.find(i => i.id.startsWith("msg_"));
+            if (placeholder) {
+              placeholder.id = id;
+            } else {
+              this.conversationItems.push({ id, type, role });
+            }
+          } else {
+            this.conversationItems.push({ id, type });
+          }
+          this.config.onConversationItemsChange?.([...this.conversationItems]);
+        }
+        break;
+      }
 
       default:
         // Log other events for debugging
@@ -602,12 +690,34 @@ export class RealtimeClient {
     const output = response.output as Array<Record<string, unknown>> | undefined;
     if (!output) return;
 
-    // Log any function calls that were in the response (for debugging)
+    // Track output items in conversationItems
+    const usage = response.usage as Record<string, unknown> | undefined;
+    const outputTokens = (usage?.output_tokens as number) || 0;
+    const tokensPerItem = output.length > 0 ? Math.round(outputTokens / output.length) : 0;
+
     for (const item of output) {
+      const id = item.id as string;
+      const type = item.type as string;
       if (item.type === "function_call") {
         console.log("Function call in response.done (already handled):", item.name);
       }
+      // Only add if not already tracked
+      if (id && !this.conversationItems.find(i => i.id === id)) {
+        const convItem: ConversationItem = {
+          id,
+          type,
+          tokens: tokensPerItem,
+        };
+        if (type === "function_call") {
+          convItem.name = item.name as string;
+        }
+        if (type === "message") {
+          convItem.role = item.role as string;
+        }
+        this.conversationItems.push(convItem);
+      }
     }
+    this.config.onConversationItemsChange?.([...this.conversationItems]);
   }
 
   private logContextUsage(event: Record<string, unknown>): void {
@@ -644,6 +754,20 @@ export class RealtimeClient {
     console.log(
       `[Context]   ↳ input: ${inputTokens.toLocaleString()} (text: ${textTokens.toLocaleString()}, audio: ${audioTokens.toLocaleString()}, cached: ${cachedTokens.toLocaleString()}) | output: ${outputTokens.toLocaleString()}`
     );
+
+    this.config.onContextUsage?.({ totalTokens, maxTokens, percent, cacheRatio, inputTokens, outputTokens });
+
+    // Update token estimates on existing items: distribute input_tokens proportionally
+    const itemCount = this.conversationItems.length;
+    if (itemCount > 0 && inputTokens > 0) {
+      const tokensPerItem = Math.round(inputTokens / itemCount);
+      for (const item of this.conversationItems) {
+        if (!item.tokens) {
+          item.tokens = tokensPerItem;
+        }
+      }
+      this.config.onConversationItemsChange?.([...this.conversationItems]);
+    }
   }
 
   private safeParseArgs(argsJson: string): Record<string, unknown> {
@@ -684,10 +808,7 @@ export class RealtimeClient {
   private async handleFunctionCall(call: FunctionCall): Promise<void> {
     this.setNovaState("thinking");
 
-    // Notify UI that function call started
-    if (this.config.onFunctionCallStart) {
-      this.config.onFunctionCallStart(call.name);
-    }
+    // onFunctionCallStart already fired in response.output_item.added handler
 
     let result: string;
 
@@ -737,6 +858,19 @@ export class RealtimeClient {
           break;
         case "show_seat_allocation":
           result = this.executeShowSeatAllocation();
+          break;
+        case "generate_quiz":
+          this.executeGenerateQuiz(call.arguments);
+          result = JSON.stringify({ status: "generating", message: "Quiz wordt op de achtergrond gegenereerd. Je krijgt een melding als het klaar is. Ga gewoon door met het gesprek." });
+          break;
+        case "quiz_toon_vraag":
+          result = this.executeQuizToonVraag();
+          break;
+        case "quiz_toon_antwoord":
+          result = this.executeQuizToonAntwoord(call.arguments);
+          break;
+        case "quiz_afsluiten":
+          result = this.executeQuizAfsluiten();
           break;
         default:
           result = JSON.stringify({ error: `Unknown function: ${call.name}` });
@@ -1447,16 +1581,6 @@ export class RealtimeClient {
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
-  // Shuffle array
-  private shuffle<T>(array: T[]): T[] {
-    const arr = [...array];
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
-  }
-
   private static FAKE_NAMES = [
     "Lisa de Vries", "Thomas Bakker", "Sophie Jansen", "Daan Visser",
     "Emma Smit", "Luuk Meijer", "Julia de Boer", "Bram Mulder",
@@ -1733,13 +1857,13 @@ export class RealtimeClient {
             this.config.onImageReady({ imageUrl: data.imageUrl, prompt });
           }
           // Inject a message into the conversation so Nova knows the image is ready
-          this.sendSilentConversationEvent("[STILLE NOTIFICATIE - REAGEER HIER NIET OP]\nHet image is klaar. Als Rens vraagt om het te tonen, gebruik dan show_generated_image.");
+          this.sendSilentConversationEvent(`[STILLE NOTIFICATIE - REAGEER HIER NIET OP]\nHet image is klaar. Als ${this.presenterName} vraagt om het te tonen, gebruik dan show_generated_image.`);
         } else {
           console.error("Image API returned no imageUrl:", data);
           if (this.config.onImageError) {
             this.config.onImageError(data.error || "Image generation failed");
           }
-          this.sendSilentConversationEvent("[STILLE NOTIFICATIE - REAGEER HIER NIET OP]\nHet image genereren is mislukt. Als Rens ernaar vraagt, vertel dat het niet gelukt is.");
+          this.sendSilentConversationEvent(`[STILLE NOTIFICATIE - REAGEER HIER NIET OP]\nHet image genereren is mislukt. Als ${this.presenterName} ernaar vraagt, vertel dat het niet gelukt is.`);
         }
       })
       .catch(err => {
@@ -1749,9 +1873,9 @@ export class RealtimeClient {
         }
         const isTemporary = (err as any).status === 503;
         if (isTemporary) {
-          this.sendConversationEvent("Het image genereren is mislukt door een tijdelijk probleem. Vertel Rens dat het even niet lukte en bied aan om het over een minuutje opnieuw te proberen.");
+          this.sendConversationEvent(`Het image genereren is mislukt door een tijdelijk probleem. Vertel ${this.presenterName} dat het even niet lukte en bied aan om het over een minuutje opnieuw te proberen.`);
         } else {
-          this.sendConversationEvent("Het image genereren is helaas mislukt. Vertel Rens dat het niet gelukt is en bied aan om het opnieuw te proberen.");
+          this.sendConversationEvent(`Het image genereren is helaas mislukt. Vertel ${this.presenterName} dat het niet gelukt is en bied aan om het opnieuw te proberen.`);
         }
       });
 
@@ -1841,7 +1965,7 @@ export class RealtimeClient {
   }
 
   // Generate deep dive data for open vraag
-  private generateOpenVraagDeepDive(question: string, answers: OpenAnswer[]): OpenVraagDeepDive {
+  private generateOpenVraagDeepDive(_question: string, answers: OpenAnswer[]): OpenVraagDeepDive {
     const regions = ["Randstad", "Noord", "Zuid", "Oost"];
     const profiles = ["Management", "HR & Talent", "IT & Tech", "Marketing & Sales"];
 
@@ -1970,8 +2094,8 @@ export class RealtimeClient {
     };
 
     if (this.activeResponseId) {
-      console.log("Response already active, queuing response.create");
-      this.pendingResponseCreate.push(send);
+      console.log("Response already active, deferring response.create until response.done");
+      this.pendingConversationEvent = send;
     } else {
       send();
     }
@@ -1999,13 +2123,27 @@ export class RealtimeClient {
     console.log("Sending function result:", conversationItem);
     this.dataChannel.send(JSON.stringify(conversationItem));
 
-    // Clear active response now that we've handled the function call
-    this.activeResponseId = null;
+    // Track this function_call_output in conversationItems
+    const estimatedTokens = Math.ceil(result.length / 4);
+    this.conversationItems.push({
+      id: `fco_${callId}`,
+      type: "function_call_output",
+      name: functionName,
+      tokens: estimatedTokens,
+    });
+    this.config.onConversationItemsChange?.([...this.conversationItems]);
 
-    // Trigger a new response with delay to let server process the function output
-    setTimeout(() => {
-      this.requestResponse(functionName);
-    }, 200);
+    // Track multi-function-call responses: only trigger response.create after ALL results are sent
+    this.pendingFunctionResultCount = Math.max(0, this.pendingFunctionResultCount - 1);
+
+    if (this.pendingFunctionResultCount === 0) {
+      // All function results sent — clear active response and trigger Nova to respond
+      this.activeResponseId = null;
+      setTimeout(() => {
+        this.requestResponse(functionName);
+      }, 200);
+    }
+    // If pendingFunctionResultCount > 0, more results are coming — don't trigger response yet
   }
 
   // Send a system message to Nova (e.g., to notify about image completion)
@@ -2018,16 +2156,16 @@ export class RealtimeClient {
       return;
     }
 
-    // Inject as system-role message so Nova has the info but doesn't respond
+    // Inject as user-role message so Nova has the info but doesn't respond
     const conversationItem = {
       type: "conversation.item.create",
       item: {
         type: "message",
-        role: "system",
+        role: "user",
         content: [
           {
             type: "input_text",
-            text: message,
+            text: `[STILLE NOTIFICATIE - NIET HARDOP VOORLEZEN, NIET OP REAGEREN]: ${message}`,
           },
         ],
       },
@@ -2035,7 +2173,35 @@ export class RealtimeClient {
 
     console.log("Sending silent conversation event:", message.substring(0, 100) + "...");
     this.dataChannel.send(JSON.stringify(conversationItem));
+
+    // Track this message in conversationItems
+    const msgId = `msg_${Date.now()}`;
+    this.conversationItems.push({
+      id: msgId,
+      type: "message",
+      role: "user",
+      tokens: Math.ceil(message.length / 4),
+    });
+    this.config.onConversationItemsChange?.([...this.conversationItems]);
     // NO response.create - Nova should not respond to this
+  }
+
+  public deleteConversationItem(itemId: string): void {
+    if (!this.dataChannel || this.dataChannel.readyState !== "open") {
+      console.error("Data channel not available for deleting conversation item");
+      return;
+    }
+
+    const deleteEvent = {
+      type: "conversation.item.delete",
+      item_id: itemId,
+    };
+
+    console.log("[Context] Deleting conversation item:", itemId);
+    this.dataChannel.send(JSON.stringify(deleteEvent));
+
+    this.conversationItems = this.conversationItems.filter((i) => i.id !== itemId);
+    this.config.onConversationItemsChange?.([...this.conversationItems]);
   }
 
   public sendConversationEvent(message: string): void {
@@ -2063,28 +2229,207 @@ export class RealtimeClient {
       //console.log("Sending conversation event:", message);
       this.dataChannel!.send(JSON.stringify(conversationItem));
 
+      // Track this message in conversationItems
+      const msgId = `msg_${Date.now()}`;
+      this.conversationItems.push({
+        id: msgId,
+        type: "message",
+        role: "user",
+        tokens: Math.ceil(message.length / 4),
+      });
+      this.config.onConversationItemsChange?.([...this.conversationItems]);
+
       // Trigger Nova to respond (safely queued if response is active)
       this.requestResponse();
     };
 
-    // If Nova is speaking or thinking, wait until she's done
+    // If Nova is speaking or thinking, defer until response.done fires
     if (this.novaState === "speaking" || this.novaState === "thinking" || this.activeResponseId) {
-      console.log("Nova is busy, waiting to send conversation event...");
-      let attempts = 0;
-      const maxAttempts = 60; // 30 seconds max
-      const interval = setInterval(() => {
-        attempts++;
-        if ((this.novaState === "listening" || this.novaState === "idle") && !this.activeResponseId || attempts >= maxAttempts) {
-          clearInterval(interval);
-          if (attempts < maxAttempts) {
-            // Small extra delay to be safe
-            setTimeout(send, 500);
-          }
-        }
-      }, 500);
+      console.log("Nova is busy, deferring conversation event until response.done");
+      this.pendingConversationEvent = send;
     } else {
       send();
     }
+  }
+
+  private executeGenerateQuiz(argsJson: string): void {
+    const args = this.safeParseArgs(argsJson) as { topic: string; numQuestions?: number };
+    const topic = args.topic;
+    const numQuestions = args.numQuestions || 6;
+
+    // Notify UI that quiz is being generated
+    if (this.config.onQuizGenerating) {
+      this.config.onQuizGenerating();
+    }
+
+    console.log("Starting quiz generation for topic:", topic);
+
+    fetch("/api/generate-quiz", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic, numQuestions }),
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        console.log("Quiz generated:", data.questions?.length, "questions");
+
+        if (data.questions && data.questions.length > 0) {
+          this.pendingQuiz = {
+            topic,
+            questions: data.questions,
+            currentIndex: -1,
+            answerRevealed: false,
+            results: new Array(data.questions.length).fill(null),
+            showSummary: false,
+          };
+          if (this.config.onQuizReady) {
+            this.config.onQuizReady();
+          }
+          this.sendSilentConversationEvent(
+            `[STILLE NOTIFICATIE - REAGEER HIER NIET OP]\nDe quiz over "${topic}" is klaar met ${data.questions.length} vragen. Als ${this.presenterName} zegt "start de quiz" of "volgende vraag", gebruik dan quiz_toon_vraag.`
+          );
+        } else {
+          this.sendConversationEvent(`Het genereren van de quiz over "${topic}" is helaas mislukt. Vertel ${this.presenterName} dat het niet gelukt is en bied aan om het opnieuw te proberen.`);
+        }
+      })
+      .catch((err) => {
+        console.error("Quiz generation failed:", err);
+        this.sendConversationEvent(`Het genereren van de quiz is mislukt. Vertel ${this.presenterName} dat het niet gelukt is.`);
+      });
+  }
+
+  private executeQuizToonVraag(): string {
+    if (!this.pendingQuiz) {
+      return JSON.stringify({ error: "Geen quiz beschikbaar. Genereer eerst een quiz met generate_quiz." });
+    }
+
+    const quiz = this.pendingQuiz;
+    const nextIndex = quiz.currentIndex + 1;
+
+    if (nextIndex >= quiz.questions.length) {
+      return JSON.stringify({ error: "Alle vragen zijn al gesteld. Gebruik quiz_afsluiten om de score te tonen." });
+    }
+
+    quiz.currentIndex = nextIndex;
+    quiz.answerRevealed = false;
+    quiz.showSummary = false;
+
+    if (this.config.onQuizUpdate) {
+      this.config.onQuizUpdate({ ...quiz });
+    }
+
+    const question = quiz.questions[nextIndex];
+    return JSON.stringify({
+      success: true,
+      message: `Vraag ${nextIndex + 1}/${quiz.questions.length}: "${question.text}" — Lees de vraag voor en wacht op het antwoord van ${this.presenterName}. Het correcte antwoord is: "${question.answer}". Onthoud dit voor de beoordeling!`,
+    });
+  }
+
+  private checkQuizAnswer(givenAnswer: string, correctAnswer: string): boolean {
+    const normalize = (s: string) =>
+      s.toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")  // remove accents
+        .replace(/[^a-z0-9\s]/g, "")  // remove punctuation
+        .replace(/\b(de|het|een|van|den|der)\b/g, "")  // remove Dutch articles
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const given = normalize(givenAnswer);
+    const correct = normalize(correctAnswer);
+
+    // Exact match
+    if (given === correct) return true;
+
+    // One contains the other (handles "Amsterdam" vs "het is Amsterdam")
+    if (given.includes(correct) || correct.includes(given)) return true;
+
+    // Check individual words overlap for multi-word answers
+    const givenWords = given.split(" ").filter(w => w.length > 2);
+    const correctWords = correct.split(" ").filter(w => w.length > 2);
+    if (correctWords.length > 0) {
+      const matchCount = correctWords.filter(w => givenWords.includes(w)).length;
+      if (matchCount / correctWords.length >= 0.6) return true;
+    }
+
+    return false;
+  }
+
+  private executeQuizToonAntwoord(argsStr: string): string {
+    if (!this.pendingQuiz) {
+      return JSON.stringify({ error: "Geen actieve quiz." });
+    }
+
+    const args = this.safeParseArgs(argsStr) as { given_answer: string };
+    const quiz = this.pendingQuiz;
+    const idx = quiz.currentIndex;
+    const question = quiz.questions[idx];
+    const givenAnswer = args.given_answer || "";
+
+    // System checks the answer, not the AI
+    const isCorrect = this.checkQuizAnswer(givenAnswer, question.answer);
+
+    quiz.answerRevealed = true;
+    quiz.results[idx] = isCorrect;
+
+    if (this.config.onQuizUpdate) {
+      this.config.onQuizUpdate({ ...quiz });
+    }
+
+    const isLast = idx === quiz.questions.length - 1;
+    const score = quiz.results.filter(r => r === true).length;
+
+    console.log(`[Quiz] Vraag ${idx + 1}: gegeven="${givenAnswer}" correct="${question.answer}" → ${isCorrect ? "GOED" : "FOUT"}`);
+
+    // Auto-show summary after last question with delay
+    if (isLast) {
+      setTimeout(() => {
+        if (this.pendingQuiz) {
+          this.pendingQuiz.showSummary = true;
+          if (this.config.onQuizUpdate) {
+            this.config.onQuizUpdate({ ...this.pendingQuiz });
+          }
+        }
+      }, 8000);
+    }
+
+    return JSON.stringify({
+      success: true,
+      correct: isCorrect,
+      given_answer: givenAnswer,
+      answer: question.answer,
+      background: question.background,
+      message: isCorrect
+        ? `Goed! Het antwoord is "${question.answer}". ${question.background}${isLast ? ` Einde quiz! Score: ${score + 1}/${quiz.questions.length}. Gebruik quiz_afsluiten.` : ` Bespreek het antwoord kort en WACHT tot ${this.presenterName} zegt "volgende" of "door".`}`
+        : `Fout! Het juiste antwoord is "${question.answer}". ${this.presenterName} zei: "${givenAnswer}". ${question.background}${isLast ? ` Einde quiz! Score: ${score}/${quiz.questions.length}. Gebruik quiz_afsluiten.` : ` Bespreek het antwoord kort en WACHT tot ${this.presenterName} zegt "volgende" of "door".`}`,
+    });
+  }
+
+  private executeQuizAfsluiten(): string {
+    if (!this.pendingQuiz) {
+      return JSON.stringify({ error: "Geen actieve quiz om af te sluiten." });
+    }
+
+    const quiz = this.pendingQuiz;
+    const score = quiz.results.filter(r => r === true).length;
+    const total = quiz.questions.length;
+
+    quiz.showSummary = true;
+    if (this.config.onQuizUpdate) {
+      this.config.onQuizUpdate({ ...quiz });
+    }
+
+    // Clear quiz after showing summary
+    setTimeout(() => {
+      this.pendingQuiz = null;
+      if (this.config.onQuizEnd) {
+        this.config.onQuizEnd();
+      }
+    }, 10000);
+
+    return JSON.stringify({
+      success: true,
+      message: `Quiz afgelopen! Score: ${score}/${total}. ${score === total ? "Perfect!" : score >= total / 2 ? "Goed gedaan!" : "Volgende keer beter!"}`,
+    });
   }
 
   disconnect(): void {
@@ -2125,6 +2470,14 @@ export class RealtimeClient {
 
     this.setConnectionState("disconnected");
     this.setNovaState("idle");
+  }
+
+  setMicrophoneMuted(muted: boolean): void {
+    if (this.localStream) {
+      this.localStream.getAudioTracks().forEach(track => {
+        track.enabled = !muted;
+      });
+    }
   }
 
   getConnectionState(): ConnectionState {

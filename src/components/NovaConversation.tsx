@@ -11,6 +11,7 @@ import { OpenVraagDeepDiveDisplay } from "./OpenVraagDeepDiveDisplay";
 import { NovaSummaryDisplay } from "./NovaSummaryDisplay";
 import { NovaImageDisplay } from "./NovaImageDisplay";
 import { SeatAllocationDisplay } from "./SeatAllocationDisplay";
+import { QuizDisplay } from "./QuizDisplay";
 import {
   RealtimeClient,
   type ConnectionState,
@@ -22,12 +23,15 @@ import {
   type NovaSummaryData,
   type NovaImageData,
   type SeatAllocationData,
+  type QuizData,
+  type ContextUsage,
+  type ConversationItem,
 } from "@/lib/realtime-client";
 import { QRCodeSVG } from "qrcode.react";
 import { generateCampaignId, createCampaign, saveQuestions, setQuestionActive, subscribeToQuestions, subscribeToActiveQuestionResults, deactivateQuestion, type PreparedQuestion } from "@/lib/firebase";
 import { QuestionManager, type QuestionDisplayData, type PollResultItem as QMPollResultItem, type OpenAnswer } from "@/lib/question-manager";
 
-type ActiveModal = "none" | "poll" | "polldeep-regions" | "polldeep-profiles" | "websearch" | "openvraag" | "openvraagdeep" | "summary" | "image" | "seats";
+type ActiveModal = "none" | "poll" | "polldeep-regions" | "polldeep-profiles" | "websearch" | "openvraag" | "openvraagdeep" | "summary" | "image" | "seats" | "quiz";
 
 // Cheat Sheet flow section helper
 function FlowSection({ title, color, items }: {
@@ -197,6 +201,18 @@ function CheatSheetModal({ onClose }: { onClose: () => void }) {
             items={[
               { step: "1", cmd: "Zoek op...", desc: "Nova zoekt het internet af" },
               { step: "2", cmd: "Toon de resultaten", desc: "Zet op scherm" },
+            ]}
+          />
+
+          {/* QUIZ */}
+          <FlowSection
+            title="Quiz"
+            color="#f59e0b"
+            items={[
+              { step: "1", cmd: "Maak een quiz over...", desc: "Nova genereert vragen (~5 sec)" },
+              { step: "2", cmd: "Start de quiz", desc: "Eerste vraag wordt getoond" },
+              { step: "3", cmd: "Geef antwoord", desc: "Nova checkt goed/fout" },
+              { step: "4", cmd: "Volgende vraag", desc: "Door naar de volgende" },
             ]}
           />
         </div>
@@ -503,6 +519,13 @@ export function NovaConversation() {
   const [searchSearching, setSearchSearching] = useState(false);
   const [searchPending, setSearchPending] = useState<{ query: string; result: string } | null>(null);
   const [seatAllocation, setSeatAllocation] = useState<SeatAllocationData | null>(null);
+  const [quizData, setQuizData] = useState<QuizData | null>(null);
+  const [quizGenerating, setQuizGenerating] = useState(false);
+  const [quizPending, setQuizPending] = useState(false);
+  const [presenterName, setPresenterName] = useState("Rens");
+  const [showContextUsage, setShowContextUsage] = useState(false);
+  const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null);
+  const [conversationItems, setConversationItems] = useState<ConversationItem[]>([]);
   const [activeModal, setActiveModal] = useState<ActiveModal>("none");
   const clientRef = useRef<RealtimeClient | null>(null);
   const questionManagerRef = useRef<QuestionManager | null>(null);
@@ -549,6 +572,7 @@ export function NovaConversation() {
   const [isSavingQuestions, setIsSavingQuestions] = useState(false);
   const [sessionBriefing, setSessionBriefing] = useState("");
   const [isPreparing, setIsPreparing] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
   const [showQuestionMenu, setShowQuestionMenu] = useState(false);
   const [showQrCode, setShowQrCode] = useState(false);
   const [showCheatSheet, setShowCheatSheet] = useState(false);
@@ -740,6 +764,7 @@ export function NovaConversation() {
         const skipNotification = [
           "generate_image",
           "web_search",
+          "generate_quiz",
         ].includes(name);
 
         if (skipNotification) {
@@ -838,6 +863,30 @@ export function NovaConversation() {
         setSeatAllocation(data);
         setActiveModal("seats");
       },
+      onQuizGenerating: () => {
+        console.log("Quiz generation started");
+        setQuizGenerating(true);
+        setQuizPending(false);
+      },
+      onQuizReady: () => {
+        console.log("Quiz ready");
+        setQuizGenerating(false);
+        setQuizPending(true);
+        playNotificationSound();
+      },
+      onQuizUpdate: (data) => {
+        console.log("Quiz update:", data.currentIndex, data.answerRevealed);
+        setQuizData(data);
+        setQuizPending(false);
+        setActiveModal("quiz");
+      },
+      onQuizEnd: () => {
+        console.log("Quiz ended");
+        setQuizData(null);
+        setActiveModal("none");
+      },
+      onContextUsage: (usage) => setContextUsage(usage),
+      onConversationItemsChange: (items) => setConversationItems(items),
       onPollDeepDiveRegions: (data) => {
         console.log("Poll deep dive regions:", data);
         deepDiveLoadingRef.current = true;
@@ -863,12 +912,8 @@ export function NovaConversation() {
     });
 
     clientRef.current = client;
-    await client.connect(
-      sessionBriefing
-        ? { context: sessionBriefing }
-        : undefined
-    );
-  }, [sessionBriefing, campaignId]); // Refs are used for activeQuestionData and firebaseQuestions to avoid stale closures
+    await client.connect({ context: sessionBriefing, presenterName });
+  }, [sessionBriefing, presenterName, campaignId]); // Refs are used for activeQuestionData and firebaseQuestions to avoid stale closures
 
   const handlePrepareSession = useCallback(async () => {
     if (!setupTopic.trim()) return;
@@ -975,6 +1020,14 @@ export function NovaConversation() {
     }
   }, [activeQuestion, campaignId]);
 
+  const handleToggleMute = useCallback(() => {
+    setIsMuted(prev => {
+      const next = !prev;
+      clientRef.current?.setMicrophoneMuted(next);
+      return next;
+    });
+  }, []);
+
   const handleDisconnect = useCallback(() => {
     if (clientRef.current) {
       clientRef.current.disconnect();
@@ -1029,6 +1082,31 @@ export function NovaConversation() {
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10" style={{ overflow: "hidden", padding: "40px 20px" }}>
           {/* NOVA AI - Epic animated title */}
           <NovaTitle />
+
+          {/* Presenter name - always visible, compact */}
+          <input
+            type="text"
+            value={presenterName}
+            onChange={(e) => setPresenterName(e.target.value)}
+            placeholder="Naam presentator"
+            style={{
+              width: "200px",
+              background: "rgba(255, 255, 255, 0.06)",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              borderRadius: "20px",
+              padding: "8px 16px",
+              color: "white",
+              fontSize: "0.8rem",
+              fontFamily: "inherit",
+              outline: "none",
+              transition: "border-color 0.2s",
+              marginBottom: "16px",
+              textAlign: "center",
+              letterSpacing: "0.5px",
+            }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(25, 89, 105, 0.5)"; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)"; }}
+          />
 
           {/* Setup panel toggle */}
           {!showSetup && (
@@ -1594,6 +1672,36 @@ export function NovaConversation() {
           >
             QR Code
           </button>
+          <button
+            onClick={() => setShowContextUsage(prev => !prev)}
+            style={{
+              color: showContextUsage ? "rgba(25, 89, 105, 0.9)" : "rgba(255, 255, 255, 0.5)",
+              fontSize: "10px",
+              fontWeight: 500,
+              letterSpacing: "2px",
+              textTransform: "uppercase",
+              padding: "8px 14px",
+              borderRadius: "16px",
+              border: `1px solid ${showContextUsage ? "rgba(25, 89, 105, 0.4)" : "rgba(255, 255, 255, 0.25)"}`,
+              background: showContextUsage ? "rgba(25, 89, 105, 0.1)" : "rgba(255, 255, 255, 0.05)",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+            }}
+            onMouseEnter={(e) => {
+              if (!showContextUsage) {
+                e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.4)";
+                e.currentTarget.style.color = "rgba(255, 255, 255, 0.8)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!showContextUsage) {
+                e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)";
+                e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)";
+              }
+            }}
+          >
+            Context
+          </button>
         </div>
 
         {/* Poll Display - landing page */}
@@ -2015,6 +2123,114 @@ export function NovaConversation() {
           </div>
         </header>
 
+        {/* Context usage overlay */}
+        {showContextUsage && (
+          <div
+            className="pointer-events-none"
+            style={{
+              position: "absolute",
+              top: "80px",
+              left: "20px",
+              zIndex: 30,
+              fontFamily: "monospace",
+              fontSize: "13px",
+              color: "rgba(255, 255, 255, 0.85)",
+              background: "rgba(0, 0, 0, 0.6)",
+              backdropFilter: "blur(12px)",
+              borderRadius: "10px",
+              padding: "10px 14px",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+              lineHeight: 1.6,
+              width: "280px",
+            }}
+          >
+            {contextUsage && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{
+                  width: "120px",
+                  height: "6px",
+                  borderRadius: "3px",
+                  background: "rgba(255, 255, 255, 0.1)",
+                  overflow: "hidden",
+                }}>
+                  <div style={{
+                    width: `${contextUsage.percent}%`,
+                    height: "100%",
+                    borderRadius: "3px",
+                    background: contextUsage.percent > 80 ? "#f30349" : contextUsage.percent > 60 ? "#f59e0b" : "#22c55e",
+                    transition: "width 0.5s ease, background 0.5s ease",
+                  }} />
+                </div>
+                <span style={{ fontWeight: 700 }}>{contextUsage.percent}%</span>
+                <span style={{ color: "rgba(255, 255, 255, 0.5)" }}>
+                  {contextUsage.totalTokens.toLocaleString()}/{contextUsage.maxTokens.toLocaleString()}
+                </span>
+              </div>
+            )}
+            {contextUsage && (
+              <div style={{ color: "rgba(255, 255, 255, 0.5)", fontSize: "11px", marginTop: "2px" }}>
+                cache: {contextUsage.cacheRatio}% {contextUsage.cacheRatio > 70 ? "✓" : contextUsage.cacheRatio > 40 ? "~" : "⚠️"}
+              </div>
+            )}
+
+            {/* Conversation items list */}
+            {conversationItems.length > 0 && (
+              <div className="pointer-events-auto" style={{
+                marginTop: "8px",
+                borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+                paddingTop: "8px",
+                maxHeight: "300px",
+                overflowY: "auto",
+              }}>
+                {[...conversationItems].reverse().map((item) => (
+                  <div key={item.id} style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "3px 0",
+                    fontSize: "12px",
+                  }}>
+                    <span style={{
+                      width: "6px",
+                      height: "6px",
+                      borderRadius: "50%",
+                      flexShrink: 0,
+                      background: item.type === "function_call" ? "#195969"
+                        : item.type === "function_call_output" ? "rgba(255,255,255,0.3)"
+                        : "rgba(255,255,255,0.6)",
+                    }} />
+                    <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "rgba(255,255,255,0.8)" }}>
+                      {item.type === "message" ? item.role : item.name || item.type}
+                    </span>
+                    {item.tokens && (
+                      <span style={{ color: "rgba(255,255,255,0.4)", fontSize: "10px", flexShrink: 0 }}>
+                        {item.tokens}t
+                      </span>
+                    )}
+                    <button
+                      onClick={() => clientRef.current?.deleteConversationItem(item.id)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "rgba(255,255,255,0.35)",
+                        cursor: "pointer",
+                        padding: "0 4px",
+                        fontSize: "14px",
+                        lineHeight: 1,
+                        flexShrink: 0,
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = "#f30349"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.2)"; }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Questions slide-out panel */}
         {showQuestionMenu && (
           <div
@@ -2216,6 +2432,61 @@ export function NovaConversation() {
           </div>
         )}
       </div>
+
+      {/* Mute button - fixed bottom right */}
+      {connectionState === "connected" && (
+        <button
+          onClick={handleToggleMute}
+          style={{
+            position: "fixed",
+            bottom: "24px",
+            right: "24px",
+            zIndex: 1000,
+            width: "48px",
+            height: "48px",
+            borderRadius: "50%",
+            border: `2px solid ${isMuted ? "rgba(243, 3, 73, 0.6)" : "rgba(255, 255, 255, 0.2)"}`,
+            background: isMuted ? "rgba(243, 3, 73, 0.2)" : "rgba(255, 255, 255, 0.08)",
+            color: isMuted ? "#f30349" : "rgba(255, 255, 255, 0.5)",
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backdropFilter: "blur(8px)",
+          }}
+          onMouseEnter={(e) => {
+            if (!isMuted) {
+              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.4)";
+              e.currentTarget.style.color = "rgba(255, 255, 255, 0.8)";
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!isMuted) {
+              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.2)";
+              e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)";
+            }
+          }}
+          title={isMuted ? "Microfoon aan" : "Microfoon uit"}
+        >
+          {isMuted ? (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="1" y1="1" x2="23" y2="23" />
+              <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+              <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .67-.1 1.32-.27 1.93" />
+              <line x1="12" y1="19" x2="12" y2="23" />
+              <line x1="8" y1="23" x2="16" y2="23" />
+            </svg>
+          ) : (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="23" />
+              <line x1="8" y1="23" x2="16" y2="23" />
+            </svg>
+          )}
+        </button>
+      )}
 
       {/* Cheat Sheet Modal - outside pointer-events-none */}
       {showCheatSheet && <CheatSheetModal onClose={() => setShowCheatSheet(false)} />}
@@ -2429,6 +2700,14 @@ export function NovaConversation() {
         />
       )}
 
+      {/* Quiz Display */}
+      {activeModal === "quiz" && quizData && (
+        <QuizDisplay
+          data={quizData}
+          onClose={() => setActiveModal("none")}
+        />
+      )}
+
       {/* Nova Image */}
       {activeModal === "image" && novaImage && (
         <NovaImageDisplay
@@ -2626,6 +2905,95 @@ export function NovaConversation() {
               </div>
               <div style={{ color: "rgba(255, 255, 255, 0.55)", fontSize: "0.9rem", marginTop: "4px" }}>
                 Vraag Nova om ze te laten zien
+              </div>
+            </div>
+          </div>
+        )}
+        {quizGenerating && (
+          <div
+            key="quiz-gen"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "16px",
+              padding: "20px 32px",
+              borderRadius: "18px",
+              background: "rgba(10, 10, 10, 0.95)",
+              border: "2px solid rgba(243, 3, 73, 0.4)",
+              boxShadow: "0 0 60px rgba(243, 3, 73, 0.15), 0 8px 32px rgba(0, 0, 0, 0.5)",
+            }}
+          >
+            <div
+              style={{
+                width: "44px",
+                height: "44px",
+                borderRadius: "50%",
+                background: "rgba(243, 3, 73, 0.15)",
+                border: "2px solid rgba(243, 3, 73, 0.4)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <div
+                style={{
+                  width: "14px",
+                  height: "14px",
+                  borderRadius: "50%",
+                  background: "#f30349",
+                  boxShadow: "0 0 12px #f30349",
+                  animation: "pulse 1.5s ease-in-out infinite",
+                }}
+              />
+            </div>
+            <div>
+              <div style={{ color: "white", fontSize: "1.15rem", fontWeight: 700 }}>
+                Quiz wordt gegenereerd
+              </div>
+              <div style={{ color: "rgba(255, 255, 255, 0.45)", fontSize: "0.9rem", marginTop: "4px" }}>
+                Even geduld...
+              </div>
+            </div>
+          </div>
+        )}
+        {quizPending && !quizGenerating && activeModal !== "quiz" && (
+          <div
+            key="quiz-ready"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "16px",
+              padding: "20px 32px",
+              borderRadius: "18px",
+              background: "rgba(10, 10, 10, 0.95)",
+              border: "2px solid rgba(243, 3, 73, 0.6)",
+              boxShadow: "0 0 60px rgba(243, 3, 73, 0.25), 0 8px 32px rgba(0, 0, 0, 0.5)",
+              animation: "imageReadyPulse 2s ease-in-out infinite",
+            }}
+          >
+            <div
+              style={{
+                width: "48px",
+                height: "48px",
+                borderRadius: "50%",
+                background: "#f30349",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "1.1rem",
+                fontWeight: 900,
+                color: "white",
+                boxShadow: "0 0 25px rgba(243, 3, 73, 0.6)",
+              }}
+            >
+              ?
+            </div>
+            <div>
+              <div style={{ color: "white", fontSize: "1.2rem", fontWeight: 700 }}>
+                Quiz is klaar!
+              </div>
+              <div style={{ color: "rgba(255, 255, 255, 0.55)", fontSize: "0.9rem", marginTop: "4px" }}>
+                Zeg &ldquo;start de quiz&rdquo; tegen Nova
               </div>
             </div>
           </div>
