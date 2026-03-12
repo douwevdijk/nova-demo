@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { NOVA_SYSTEM_PROMPT, NOVA_VOICE, NOVA_TOOLS } from "@/lib/nova-persona";
+import { buildSystemPrompt, NOVA_VOICE, NOVA_TOOLS } from "@/lib/nova-persona";
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,20 +14,22 @@ export async function POST(request: NextRequest) {
 
     // Parse optional context (briefing from Gemini)
     let context = "";
+    let presenterName = "";
     try {
       const body = await request.json();
       context = body.context || "";
+      presenterName = body.presenterName || "";
     } catch {
       // No body is fine - context is optional
     }
 
     // Build instructions with optional context
-    let instructions = NOVA_SYSTEM_PROMPT;
+    let instructions = buildSystemPrompt(presenterName || undefined);
     if (context) {
       instructions += `\n\n# Sessie Context
 ${context}
 
-Gebruik deze context om je antwoorden, vragen en analyses relevant te maken voor dit onderwerp. Als Rens vragen stelt of polls wil starten, baseer je suggesties op deze context.`;
+Gebruik deze context om je antwoorden, vragen en analyses relevant te maken voor dit onderwerp. Als ${presenterName || 'de presentator'} vragen stelt of polls wil starten, baseer je suggesties op deze context.`;
     }
 
     // Create ephemeral client secret for WebRTC connection (GA API)
@@ -50,7 +52,11 @@ Gebruik deze context om je antwoorden, vragen en analyses relevant te maken voor
               },
               // Use semantic VAD for smarter turn detection
               turn_detection: {
-                type: "semantic_vad",
+                type: "server_vad",
+                threshold: 0.8,
+                silence_duration_ms: 400,
+                //create_response: false,
+                prefix_padding_ms: 800 
               },
             },
             output: {
