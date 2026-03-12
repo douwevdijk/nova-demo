@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BuzzMaster — AI-powered Audience Engagement</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --primary: #f30349;
+      --teal: #195969;
+      --bg: #ffffff;
+      --bg-light: #f7f7f8;
+      --border: #e8e8ec;
+      --text: #1a1a1a;
+      --text-secondary: #5a5a6a;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      font-family: 'Avenir', 'Avenir Next', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .slides { position: relative; width: 100%; height: 100%; }
+
+    .slide {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 60px 100px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.45s ease;
+      background: var(--bg);
+    }
+    .slide.active { opacity: 1; pointer-events: auto; }
+
+    /* ── Shared ── */
+    .accent { color: var(--primary); }
+    h1, h2, h3 { font-weight: 900; }
+    h2 {
+      font-size: 3.4rem; font-weight: 900; line-height: 1.08;
+      letter-spacing: -0.04em; margin-bottom: 20px;
+    }
+    .section-intro {
+      font-size: 1.3rem; color: var(--text-secondary); max-width: 680px;
+      text-align: center; margin-bottom: 48px; line-height: 1.65;
+    }
+    .divider {
+      width: 48px; height: 3px; background: var(--primary);
+      border-radius: 2px; margin-bottom: 24px;
+    }
+
+    /* ── Slide counter ── */
+    .slide-counter {
+      position: fixed; bottom: 20px; right: 28px;
+      font-size: 0.78rem; color: var(--text-secondary);
+      font-weight: 500; z-index: 100;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Progress bar ── */
+    .progress-bar {
+      position: fixed; top: 0; left: 0; height: 2px;
+      background: var(--primary);
+      transition: width 0.4s ease; z-index: 100;
+    }
+
+    /* ═══ SLIDE 1 — Hero ═══ */
+    .hero__logo {
+      max-width: 180px;
+      margin-bottom: 48px;
+    }
+    .hero__headline {
+      font-size: 4.5rem;
+      font-weight: 900;
+      line-height: 1.05;
+      letter-spacing: -0.045em;
+      text-align: center;
+    }
+    .hero__sub {
+      margin-top: 24px;
+      font-size: 1.3rem;
+      line-height: 1.65;
+      color: var(--text-secondary);
+      max-width: 520px;
+      text-align: center;
+    }
+
+    /* ═══ SLIDE 2 — Nova intro (single column) ═══ */
+    .nova-intro {
+      max-width: 720px;
+      text-align: center;
+    }
+    .nova-intro h2 {
+      font-size: 3.6rem;
+      margin-bottom: 36px;
+    }
+    .nova-intro p {
+      font-size: 1.25rem;
+      line-height: 1.75;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+    }
+    .nova-intro p:last-child { margin-bottom: 0; }
+    .nova-intro strong { color: var(--text); }
+    .nova-name {
+      color: var(--primary); font-weight: 900;
+    }
+    .ai-badge {
+      display: inline-block; font-size: 0.35em; font-weight: 800;
+      background: var(--primary); color: #fff;
+      padding: 2px 7px; border-radius: 5px;
+      vertical-align: top; margin-left: 2px;
+      letter-spacing: 0.05em; line-height: 1;
+      position: relative; top: -0.1em;
+    }
+
+    /* ═══ SLIDE 3 — Flow (step cards) ═══ */
+    .slide--scroll {
+      overflow-y: auto;
+      justify-content: flex-start;
+      padding-top: 80px;
+      padding-bottom: 80px;
+    }
+    .steps-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 18px; max-width: 960px; width: 100%;
+    }
+    .step-card {
+      padding: 28px 30px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--bg);
+    }
+    .step-card__num {
+      font-size: 0.7rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--primary); margin-bottom: 10px;
+    }
+    .step-card__title {
+      font-size: 1.2rem; font-weight: 900; margin-bottom: 6px;
+      letter-spacing: -0.02em;
+    }
+    .step-card__desc {
+      font-size: 1rem; color: var(--text-secondary); line-height: 1.6;
+    }
+
+    /* ═══ SLIDE 4 — Setup ═══ */
+    .setup-content {
+      display: flex; gap: 64px;
+      max-width: 1100px; width: 100%;
+      align-items: flex-start;
+    }
+    .setup-left { flex: 1; }
+    .setup-left p {
+      font-size: 1.15rem; line-height: 1.7; color: var(--text-secondary);
+      margin-bottom: 28px;
+    }
+    .setup-checks {
+      list-style: none; display: flex; flex-direction: column; gap: 14px;
+    }
+    .setup-checks li {
+      font-size: 1.1rem; line-height: 1.5;
+      color: var(--text); padding-left: 28px; position: relative;
+    }
+    .setup-checks li::before {
+      content: '\2713'; position: absolute; left: 0;
+      color: var(--primary); font-weight: 800;
+    }
+    .setup-right { flex: 1; }
+    .setup-stats {
+      display: flex; flex-direction: column; gap: 32px;
+    }
+    .setup-stat {}
+    .setup-stat__val {
+      font-size: 4rem; font-weight: 900; line-height: 1;
+      letter-spacing: -0.03em; color: var(--text);
+    }
+    .setup-stat__label {
+      font-size: 0.75rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--text-secondary);
+      margin-top: 6px;
+    }
+
+    /* ═══ SLIDES 5-8 — Fullscreen mockups ═══ */
+    .slide--dark {
+      background: #000 !important;
+      color: #fff;
+    }
+    .fs-screen {
+      width: 100%; height: 100%;
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 50% 40%, #0a0a14, #000);
+      display: flex; flex-direction: column;
+      font-family: 'Avenir', 'Avenir Next', system-ui, sans-serif;
+      overflow: hidden;
+    }
+    .fs-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 24px 40px; flex-shrink: 0;
+    }
+    .fs-header-label {
+      font-size: 14px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: rgba(255,255,255,0.35);
+    }
+    .fs-header-live {
+      font-size: 13px; font-weight: 700; color: #22c55e;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .fs-live-dot {
+      width: 10px; height: 10px; background: #22c55e;
+      border-radius: 50; box-shadow: 0 0 12px rgba(34,197,94,0.6);
+      border-radius: 50%;
+    }
+    .fs-slide-label {
+      position: absolute; bottom: 28px; left: 50%;
+      transform: translateX(-50%);
+      font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.25);
+      text-transform: uppercase; letter-spacing: 0.12em;
+    }
+
+    /* -- FS 1: NOVA avatar -- */
+    .fs-nova {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+    .fs-nova-ring {
+      width: 220px; height: 220px; border-radius: 50%;
+      border: 5px solid #f30349;
+      display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(circle, rgba(243,3,73,0.12), transparent);
+      box-shadow: 0 0 80px rgba(243,3,73,0.25), 0 0 160px rgba(243,3,73,0.08);
+      position: relative;
+    }
+    .fs-nova-ring::before {
+      content: ''; position: absolute; inset: -14px;
+      border-radius: 50%; border: 1px solid rgba(243,3,73,0.12);
+    }
+    .fs-nova-n {
+      font-size: 80px; font-weight: 900; color: #f30349;
+      position: relative; z-index: 2;
+    }
+    .fs-nova-outer {
+      position: absolute; width: 250px; height: 250px;
+      border-radius: 50%; border: 1px solid rgba(243,3,73,0.1);
+      pointer-events: none;
+    }
+    .fs-nova-orbit {
+      position: absolute; width: 280px; height: 280px;
+      pointer-events: none;
+    }
+    .fs-nova-glow {
+      position: absolute; inset: -30px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(243,3,73,0.2), transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+    .fs-nova-scan {
+      position: absolute; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, transparent, #f30349, rgba(243,3,73,0.3), transparent);
+      box-shadow: 0 0 20px rgba(243,3,73,0.5);
+      opacity: 0; z-index: 1; pointer-events: none;
+    }
+    .fs-nova-status {
+      margin-top: 28px; font-size: 16px; font-weight: 600;
+      color: rgba(255,255,255,0.45); letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+    .fs-nova-speech {
+      margin-top: 20px; max-width: 600px; text-align: center;
+      font-size: 22px; font-weight: 500; color: rgba(255,255,255,0.7);
+      line-height: 1.6; font-style: italic;
+    }
+
+    /* -- FS 2: Poll bars -- */
+    .fs-poll {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 0 80px;
+    }
+    .fs-poll-badge {
+      display: inline-block; padding: 10px 28px; border-radius: 9999px;
+      background: #f30349; color: #fff;
+      font-size: 14px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 3px; margin-bottom: 20px;
+      box-shadow: 0 0 35px rgba(243,3,73,0.5);
+    }
+    .fs-poll-q {
+      font-size: 36px; font-weight: 700; color: #fff;
+      text-align: center; margin-bottom: 48px; line-height: 1.25;
+    }
+    .fs-bars {
+      display: flex; align-items: flex-end; justify-content: center;
+      gap: 40px; height: 320px; width: 80%; max-width: 900px;
+    }
+    .fs-bar-col {
+      display: flex; flex-direction: column; align-items: center; flex: 1;
+    }
+    .fs-bar-pct {
+      font-size: 32px; font-weight: 900; color: #fff; margin-bottom: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .fs-bar-track {
+      width: 100%; max-width: 180px; border-radius: 12px 12px 0 0;
+    }
+    .fs-bar-lbl {
+      font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.55);
+      text-align: center; margin-top: 16px;
+    }
+    .fs-poll-votes {
+      font-size: 16px; color: rgba(255,255,255,0.3); margin-top: 28px;
+      font-weight: 600;
+    }
+
+    /* -- FS 3: Open vraag -- */
+    .fs-open {
+      flex: 1; display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .fs-open-top {
+      text-align: center; padding: 12px 0 20px; flex-shrink: 0;
+    }
+    .fs-open-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 20px; border-radius: 40px;
+      background: rgba(243,3,73,0.1); border: 1px solid rgba(243,3,73,0.3);
+      font-size: 13px; font-weight: 700; color: #f30349;
+      text-transform: uppercase; letter-spacing: 0.12em;
+    }
+    .fs-open-dot {
+      width: 10px; height: 10px; border-radius: 50%; background: #f30349;
+      box-shadow: 0 0 10px rgba(243,3,73,0.6);
+    }
+    .fs-open-q {
+      font-size: 36px; font-weight: 700; color: rgba(255,255,255,0.9);
+      text-align: center; margin-top: 14px; line-height: 1.25;
+    }
+    .fs-tiles {
+      flex: 1; display: flex; gap: 16px;
+      padding: 16px 40px 60px;
+      overflow: hidden;
+    }
+    .fs-tile-col {
+      flex: 1; display: flex; flex-direction: column; gap: 16px;
+    }
+    .fs-tile {
+      background: linear-gradient(135deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px; padding: 26px 28px;
+    }
+    .fs-tile-text {
+      font-size: 24px; font-weight: 400; color: rgba(255,255,255,0.9);
+      line-height: 1.45;
+    }
+    .fs-tile-name {
+      font-size: 15px; color: rgba(255,255,255,0.35); font-weight: 500;
+      margin-top: 12px; padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .fs-tile-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+
+    /* -- FS 4: Analyse -- */
+    .fs-analyse {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 0 80px;
+    }
+    .fs-insight-card {
+      width: 100%; max-width: 800px;
+      background: linear-gradient(145deg, #0d0d0d, #050505);
+      border: 3px solid rgba(243,3,73,0.35);
+      border-radius: 20px; padding: 44px 48px;
+      box-shadow: 0 0 80px rgba(243,3,73,0.1);
+    }
+    .fs-insight-header {
+      display: flex; align-items: center; gap: 14px; margin-bottom: 24px;
+    }
+    .fs-insight-avatar {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: #f30349; display: flex; align-items: center;
+      justify-content: center; font-size: 22px; font-weight: 900; color: #fff;
+      box-shadow: 0 0 30px rgba(243,3,73,0.5); flex-shrink: 0;
+    }
+    .fs-insight-label {
+      font-size: 14px; font-weight: 700; color: #f30349;
+      text-transform: uppercase; letter-spacing: 3px;
+    }
+    .fs-insight-text {
+      font-size: 28px; font-weight: 500; color: #fff;
+      line-height: 1.65;
+    }
+    .fs-insight-text strong {
+      color: #f30349; font-weight: 700;
+    }
+    .fs-insight-stats {
+      display: flex; gap: 40px; margin-top: 32px;
+      padding-top: 28px; border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .fs-insight-stat-val {
+      font-size: 40px; font-weight: 900; color: #fff;
+    }
+    .fs-insight-stat-lbl {
+      font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.35);
+      text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px;
+    }
+
+    /* -- FS: Deep dive analyse (regio + profiel) -- */
+    .fs-deepdive {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 0 60px; gap: 32px;
+    }
+    .fs-dd-badge {
+      display: inline-block; padding: 8px 24px; border-radius: 9999px;
+      background: linear-gradient(135deg, #f30349, #9333ea);
+      font-size: 13px; font-weight: 700; color: #fff;
+      text-transform: uppercase; letter-spacing: 3px;
+    }
+    .fs-dd-title {
+      font-size: 32px; font-weight: 700; color: #fff;
+      text-align: center; line-height: 1.25;
+    }
+    .fs-dd-grid {
+      display: flex; gap: 28px; width: 100%; max-width: 1000px;
+    }
+    .fs-dd-col { flex: 1; }
+    .fs-dd-col-label {
+      font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.35);
+      text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 14px;
+    }
+    .fs-dd-card {
+      padding: 18px 22px; border-radius: 14px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      margin-bottom: 10px;
+    }
+    .fs-dd-card-top {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 6px;
+    }
+    .fs-dd-card-name {
+      font-size: 17px; font-weight: 700; color: #fff;
+    }
+    .fs-dd-card-val {
+      font-size: 22px; font-weight: 900; color: #f30349;
+    }
+    .fs-dd-card-bar {
+      height: 6px; border-radius: 3px; background: rgba(255,255,255,0.06);
+      overflow: hidden;
+    }
+    .fs-dd-card-fill {
+      height: 100%; border-radius: 3px;
+    }
+    .fs-dd-card-detail {
+      font-size: 13px; color: rgba(255,255,255,0.45);
+      margin-top: 6px; line-height: 1.4;
+    }
+    .fs-dd-summary {
+      width: 100%; max-width: 1000px;
+      display: flex; align-items: flex-start; gap: 14px;
+      padding: 18px 22px; border-radius: 14px;
+      background: rgba(243,3,73,0.08);
+      border: 1px solid rgba(243,3,73,0.2);
+    }
+    .fs-dd-summary-avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: #f30349; display: flex; align-items: center;
+      justify-content: center; font-size: 15px; font-weight: 900; color: #fff;
+      box-shadow: 0 0 16px rgba(243,3,73,0.4); flex-shrink: 0;
+    }
+    .fs-dd-summary-text {
+      font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.75);
+      line-height: 1.6;
+    }
+    .fs-dd-summary-text strong {
+      color: #f30349; font-weight: 700;
+    }
+
+    /* -- FS: Generated image -- */
+    .fs-image {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 0 80px; gap: 24px;
+    }
+    .fs-image-badge {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 8px 24px; border-radius: 9999px;
+      background: rgba(243,3,73,0.1); border: 1px solid rgba(243,3,73,0.3);
+      font-size: 13px; font-weight: 700; color: #f30349;
+      text-transform: uppercase; letter-spacing: 0.12em;
+    }
+    .fs-image-frame {
+      width: 100%; max-width: 720px; aspect-ratio: 16/10;
+      border-radius: 20px; overflow: hidden;
+      border: 2px solid rgba(255,255,255,0.1);
+      box-shadow: 0 0 60px rgba(243,3,73,0.1);
+      position: relative;
+      background: linear-gradient(135deg, #1a0a10, #0a0a14);
+    }
+    .fs-image-canvas {
+      width: 100%; height: 100%; object-fit: cover;
+    }
+    .fs-image-prompt {
+      font-size: 16px; font-weight: 500; color: rgba(255,255,255,0.45);
+      max-width: 600px; text-align: center; line-height: 1.6;
+      font-style: italic;
+    }
+
+    /* -- FS: Fact-check -- */
+    .fs-factcheck {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 0 80px;
+    }
+    .fs-fc-card {
+      width: 100%; max-width: 800px;
+      background: linear-gradient(145deg, #0d0d0d, #050505);
+      border: 3px solid rgba(243,3,73,0.35);
+      border-radius: 20px; padding: 44px 48px;
+      box-shadow: 0 0 80px rgba(243,3,73,0.1);
+    }
+    .fs-fc-header {
+      display: flex; align-items: center; gap: 14px; margin-bottom: 28px;
+    }
+    .fs-fc-verdict {
+      display: inline-block; padding: 6px 18px; border-radius: 8px;
+      font-size: 14px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    .fs-fc-verdict--true {
+      background: rgba(34,197,94,0.15); color: #22c55e;
+      border: 1px solid rgba(34,197,94,0.3);
+    }
+    .fs-fc-verdict--false {
+      background: rgba(243,3,73,0.15); color: #f30349;
+      border: 1px solid rgba(243,3,73,0.3);
+    }
+    .fs-fc-claim {
+      font-size: 26px; font-weight: 700; color: #fff;
+      line-height: 1.35; margin-bottom: 20px;
+    }
+    .fs-fc-explanation {
+      font-size: 18px; font-weight: 500; color: rgba(255,255,255,0.7);
+      line-height: 1.7;
+    }
+    .fs-fc-explanation strong {
+      color: #f30349; font-weight: 700;
+    }
+    .fs-fc-source {
+      margin-top: 24px; padding-top: 20px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      font-size: 13px; color: rgba(255,255,255,0.3);
+      font-weight: 600;
+    }
+
+    /* -- FS: Quiz card (demo style) -- */
+    .fs-quiz-wrap {
+      flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 0 60px;
+    }
+    .fs-quiz-card {
+      width: 100%; max-width: 960px; position: relative;
+      background: linear-gradient(145deg, #0d0d0d, #050505);
+      border-radius: 20px;
+      border: 3px solid rgba(243,3,73,0.4);
+      padding: 56px 64px;
+      box-shadow: 0 50px 100px rgba(0,0,0,0.8), 0 0 150px rgba(243,3,73,0.15);
+    }
+    .fs-quiz-timer {
+      position: absolute; top: -48px; left: 50%;
+      transform: translateX(-50%);
+      width: 96px; height: 96px;
+    }
+    .fs-quiz-timer svg {
+      width: 100%; height: 100%; transform: rotate(-90deg);
+    }
+    .fs-quiz-timer-bg {
+      fill: rgba(10,10,10,0.95);
+      stroke: rgba(255,255,255,0.08); stroke-width: 6;
+    }
+    .fs-quiz-timer-fill {
+      fill: none; stroke: #f30349; stroke-width: 6;
+      stroke-linecap: round;
+      stroke-dasharray: 339; stroke-dashoffset: 85;
+      filter: drop-shadow(0 0 8px rgba(243,3,73,0.5));
+    }
+    .fs-quiz-timer-num {
+      position: absolute; inset: 0; display: flex;
+      align-items: center; justify-content: center;
+      font-size: 36px; font-weight: 900; color: #fff;
+      font-variant-numeric: tabular-nums;
+    }
+    .fs-quiz-header {
+      display: flex; align-items: center; gap: 16px;
+      margin-bottom: 28px; margin-top: 16px;
+    }
+    .fs-quiz-icon {
+      width: 52px; height: 52px; border-radius: 50%;
+      background: #f30349; display: flex; align-items: center;
+      justify-content: center; font-size: 24px; font-weight: 900;
+      color: #fff; box-shadow: 0 0 40px rgba(243,3,73,0.6);
+      flex-shrink: 0;
+    }
+    .fs-quiz-meta-label {
+      font-size: 13px; font-weight: 700; color: #f30349;
+      text-transform: uppercase; letter-spacing: 3px;
+      display: block; margin-bottom: 4px;
+    }
+    .fs-quiz-meta-sub {
+      font-size: 20px; font-weight: 600; color: #fff;
+    }
+    .fs-quiz-q {
+      font-size: 40px; font-weight: 700; color: #fff;
+      line-height: 1.35; margin: 0 0 40px 0;
+    }
+    .fs-quiz-answer {
+      display: inline-block; padding: 16px 40px;
+      background: rgba(243,3,73,0.15);
+      border: 2px solid rgba(243,3,73,0.5);
+      border-radius: 16px;
+    }
+    .fs-quiz-answer-text {
+      font-size: 36px; font-weight: 800; color: #f30349;
+    }
+    .fs-quiz-bg {
+      margin-top: 28px; font-size: 24px; font-weight: 500;
+      color: #fff; line-height: 1.6;
+      font-style: italic;
+    }
+    .fs-quiz-footer {
+      display: flex; align-items: center; gap: 20px;
+      margin-top: 36px; padding-top: 28px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      font-size: 18px; font-weight: 700;
+      color: #fff;
+    }
+    .fs-quiz-footer-score {
+      font-size: 20px; color: #fff; font-weight: 800;
+    }
+
+    /* ═══ Phones slide ═══ */
+    .fs-phones {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 0 40px; gap: 36px;
+    }
+    .fs-phones-row {
+      display: flex; gap: 56px; align-items: center; justify-content: center;
+    }
+    .fs-phone-col {
+      display: flex; flex-direction: column; align-items: center; gap: 20px;
+    }
+    .fs-phone-label {
+      font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 4px; color: rgba(255,255,255,0.35);
+    }
+    .fs-phone {
+      width: 240px; height: 490px;
+      background: #1a1a1a; border-radius: 40px;
+      border: 3px solid #333;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.8), 0 0 60px rgba(243,3,73,0.06);
+      overflow: hidden; position: relative;
+      display: flex; flex-direction: column;
+    }
+    .fs-phone::before {
+      content: ''; position: absolute; top: 10px; left: 50%;
+      transform: translateX(-50%); width: 72px; height: 22px;
+      background: #000; border-radius: 12px; z-index: 10;
+    }
+    .fs-phone-screen {
+      flex: 1; margin: 4px; border-radius: 36px;
+      overflow: hidden; display: flex; flex-direction: column;
+      background: radial-gradient(ellipse at 50% 30%, #0f0f1a, #050508);
+    }
+    .fs-phone-header {
+      padding: 36px 16px 10px; text-align: center;
+      font-size: 9px; font-weight: 800; color: rgba(255,255,255,0.2);
+      text-transform: uppercase; letter-spacing: 0.1em;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .fs-phone-body {
+      display: flex; flex-direction: column;
+      padding: 14px 14px 18px; gap: 10px;
+    }
+    .fs-phone-q {
+      font-size: 13px; font-weight: 800; color: #fff;
+      text-align: center; line-height: 1.4;
+    }
+    /* Poll options */
+    .fs-phone-options {
+      display: flex; flex-direction: column; gap: 7px; margin-top: 6px;
+    }
+    .fs-phone-opt {
+      padding: 13px 14px; border-radius: 12px;
+      background: rgba(255,255,255,0.06); border: 1.5px solid rgba(255,255,255,0.1);
+      font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.7);
+    }
+    .fs-phone-opt--selected {
+      background: #f30349; color: #fff; border-color: #f30349;
+      box-shadow: 0 4px 20px rgba(243,3,73,0.4);
+    }
+    /* Open vraag input */
+    .fs-phone-input-wrap {
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .fs-phone-textarea {
+      padding: 12px; border-radius: 12px;
+      background: rgba(255,255,255,0.06); border: 1.5px solid rgba(255,255,255,0.1);
+      font-size: 12px; color: rgba(255,255,255,0.5); line-height: 1.6;
+      font-family: inherit;
+    }
+    .fs-phone-send {
+      align-self: center; padding: 10px 24px;
+      border-radius: 9999px; background: #f30349; color: #fff;
+      font-size: 11px; font-weight: 800; border: none;
+      text-transform: uppercase; letter-spacing: 1.5px;
+      box-shadow: 0 4px 20px rgba(243,3,73,0.4);
+    }
+    /* Quiz options */
+    .fs-phone-quiz-timer {
+      width: 40px; height: 40px; margin: 0 auto 6px;
+      border-radius: 50%; border: 3px solid #f30349;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: 900; color: #f30349;
+      box-shadow: 0 0 20px rgba(243,3,73,0.2);
+    }
+    .fs-phone-quiz-opts {
+      display: flex; flex-direction: column; gap: 7px; margin-top: 8px;
+    }
+    .fs-phone-quiz-opt {
+      padding: 12px 14px; border-radius: 10px;
+      background: rgba(255,255,255,0.06); border: 1.5px solid rgba(255,255,255,0.1);
+      font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.7);
+      text-align: left;
+    }
+    .fs-phone-quiz-opt--selected {
+      background: #f30349; color: #fff; border-color: #f30349;
+      box-shadow: 0 4px 20px rgba(243,3,73,0.4);
+    }
+
+    /* ═══ SLIDE — Praktisch ═══ */
+    .praktisch {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 20px; max-width: 800px; width: 100%;
+    }
+    .praktisch-card {
+      padding: 28px 24px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    .praktisch-card h3 { font-size: 1.25rem; font-weight: 800; margin-bottom: 8px; }
+    .praktisch-card p { font-size: 1.05rem; color: var(--text-secondary); line-height: 1.55; }
+
+    /* ═══ SLIDE 7 — CTA ═══ */
+    .cta-box { text-align: center; }
+    .cta-box .logo { max-width: 160px; margin-bottom: 36px; }
+    .cta-btn {
+      display: inline-block; margin-top: 28px;
+      padding: 16px 48px; border-radius: 8px;
+      background: var(--primary); color: #fff;
+      font-size: 1.2rem; font-weight: 800;
+      text-decoration: none; letter-spacing: -0.01em;
+      transition: background 0.2s;
+    }
+    .cta-btn:hover { background: #d50240; }
+    .contact-info {
+      margin-top: 24px; color: var(--text-secondary);
+      font-size: 0.95rem; line-height: 2;
+    }
+  </style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<div class="slides" id="slides">
+
+  <!-- ═══ SLIDE 1 — Titel ═══ -->
+  <div class="slide active" data-slide="1">
+    <img class="hero__logo" src="logo-buzzmaster.png" alt="BuzzMaster">
+    <h1 class="hero__headline">
+      AI-powered<br>publieks<span class="accent">interactie</span>
+    </h1>
+    <p class="hero__sub">
+      Een AI die meeluistert, meedenkt en je publiek activeert. Live, op het podium, in realtime.
+    </p>
+  </div>
+
+  <!-- ═══ SLIDE 2 — Nova intro ═══ -->
+  <div class="slide" data-slide="2">
+    <div class="nova-intro">
+      <h2>Maak kennis met <span class="nova-name">NOVA</span> <span class="ai-badge">AI</span></h2>
+      <p>NOVA is een AI-gestuurde co-host die live meedraait tijdens je event. Ze luistert mee, gaat in gesprek met de spreker en activeert het publiek op precies het juiste moment.</p>
+      <p>Ze voert live een dialoog met de host, stelt verhelderende vragen, doet fact-checks en brengt eigen inzichten in. Tegelijkertijd schakelt ze zelfstandig tussen polls, open vragen en quizzen. Als het publiek antwoordt, analyseert ze alle resultaten direct — thema's, sentiment, uitschieters — en presenteert de kern terug aan de zaal.</p>
+      <p><strong>Geen voorbereiding, geen knoppen, geen technische drempel. De spreker heeft een volwaardige gesprekspartner naast zich die ook nog eens de hele zaal kan lezen.</strong></p>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 3 — Hoe het werkt ═══ -->
+  <div class="slide slide--scroll" data-slide="3">
+    <div class="divider"></div>
+    <h2>Hoe het <span class="accent">werkt</span></h2>
+    <p class="section-intro">
+      Eén doorlopende loop van spreken, vragen, stemmen en analyseren. Volledig hands-free.
+    </p>
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-card__num">01 — In gesprek</div>
+        <div class="step-card__title">Live dialoog met de spreker</div>
+        <div class="step-card__desc">NOVA voert een echt gesprek met de host op het podium. Ze reageert op wat er gezegd wordt, stelt verhelderende vragen, doet live fact-checks en brengt eigen inzichten in op basis van de context.</div>
+      </div>
+      <div class="step-card">
+        <div class="step-card__num">02 — Publiek activeren</div>
+        <div class="step-card__title">Polls, open vragen en quizzen</div>
+        <div class="step-card__desc">NOVA bedenkt vragen die aansluiten bij het onderwerp en stuurt ze naar het podiumscherm en de telefoons van alle deelnemers. Ze kiest zelfstandig het juiste format.</div>
+      </div>
+      <div class="step-card">
+        <div class="step-card__num">03 — Stemmen</div>
+        <div class="step-card__title">Deelnemers antwoorden via hun telefoon</div>
+        <div class="step-card__desc">QR-code scannen en direct stemmen of typen. Geen app-download, geen account aanmaken. Resultaten verschijnen realtime op het podiumscherm.</div>
+      </div>
+      <div class="step-card">
+        <div class="step-card__num">04 — Analyseren</div>
+        <div class="step-card__title">Honderden antwoorden direct verwerkt</div>
+        <div class="step-card__desc">NOVA leest alle antwoorden tegelijk, clustert ze op thema, detecteert sentiment en uitschieters, en presenteert de kern terug aan de zaal en de spreker.</div>
+      </div>
+      <div class="step-card">
+        <div class="step-card__num">05 — Herhalen</div>
+        <div class="step-card__title">De loop draait continu door</div>
+        <div class="step-card__desc">De spreker pikt de inzichten op en gaat verder. NOVA blijft meeluisteren en kan op elk moment opnieuw het publiek activeren of het gesprek een andere kant op sturen.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 4 — Setup ═══ -->
+  <div class="slide" data-slide="4">
+    <div class="divider"></div>
+    <h2>De <span class="accent">opzet</span></h2>
+    <p class="section-intro">
+      Draait volledig in de browser. Geen installatie, geen downloads. Wij regelen de setup en staan standby tijdens je event.
+    </p>
+    <div class="setup-content">
+      <div class="setup-left">
+        <ul class="setup-checks">
+          <li>Werkt op elk apparaat met een browser</li>
+          <li>Setup in minder dan 10 minuten</li>
+          <li>Technisch team standby tijdens je event</li>
+          <li>Volledig aanpasbaar aan jouw programma</li>
+        </ul>
+      </div>
+      <div class="setup-right">
+        <div class="setup-stats">
+          <div class="setup-stat">
+            <div class="setup-stat__val">&infin;</div>
+            <div class="setup-stat__label">Schaalbaarheid</div>
+          </div>
+          <div class="setup-stat">
+            <div class="setup-stat__val">1000+</div>
+            <div class="setup-stat__label">Gelijktijdige connecties</div>
+          </div>
+          <div class="setup-stat">
+            <div class="setup-stat__val">0</div>
+            <div class="setup-stat__label">Installaties nodig</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 5 — NOVA gezicht ═══ -->
+  <div class="slide slide--dark" data-slide="5">
+    <div class="fs-screen">
+      <div class="fs-header">
+        <span class="fs-header-label"></span>
+        <span class="fs-header-live"><span class="fs-live-dot"></span> Live</span>
+      </div>
+      <div class="fs-nova">
+        <div class="fs-poll-badge" style="margin-bottom: 24px;">Live dialoog</div>
+        <div class="fs-nova-orbit" id="nova-orbit"></div>
+        <div class="fs-nova-outer" id="nova-outer"></div>
+        <div class="fs-nova-ring" id="nova-ring">
+          <div class="fs-nova-scan" id="nova-scan"></div>
+          <div class="fs-nova-glow" id="nova-glow"></div>
+          <span class="fs-nova-n" id="nova-n">N</span>
+        </div>
+        <div class="fs-nova-status" id="nova-status">Luistert mee...</div>
+        <div class="fs-nova-speech" id="nova-speech">"Interessant punt over de energietransitie. Zullen we even peilen wat de zaal ervan vindt?"</div>
+      </div>
+      <div class="fs-slide-label">NOVA — Live dialoog</div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 6 — Poll resultaten ═══ -->
+  <div class="slide slide--dark" data-slide="6">
+    <div class="fs-screen">
+      <div class="fs-header">
+        <span class="fs-header-label"></span>
+        <span class="fs-header-live"><span class="fs-live-dot"></span> Live</span>
+      </div>
+      <div class="fs-poll">
+        <div class="fs-poll-badge">Live poll</div>
+        <div class="fs-poll-q">Wat is de grootste uitdaging<br>bij de energietransitie?</div>
+        <div class="fs-bars">
+          <div class="fs-bar-col">
+            <span class="fs-bar-pct">38%</span>
+            <div class="fs-bar-track" style="height:240px; background: linear-gradient(to top, #f30349, #ff3366); border-radius:12px 12px 0 0; box-shadow: 0 0 25px rgba(243,3,73,0.4);"></div>
+            <span class="fs-bar-lbl">Kosten</span>
+          </div>
+          <div class="fs-bar-col">
+            <span class="fs-bar-pct">27%</span>
+            <div class="fs-bar-track" style="height:170px; background: linear-gradient(to top, #9333ea, #a855f7); border-radius:12px 12px 0 0; box-shadow: 0 0 25px rgba(147,51,234,0.4);"></div>
+            <span class="fs-bar-lbl">Draagvlak</span>
+          </div>
+          <div class="fs-bar-col">
+            <span class="fs-bar-pct">22%</span>
+            <div class="fs-bar-track" style="height:140px; background: linear-gradient(to top, #f59e0b, #fbbf24); border-radius:12px 12px 0 0; box-shadow: 0 0 25px rgba(245,158,11,0.4);"></div>
+            <span class="fs-bar-lbl">Infrastructuur</span>
+          </div>
+          <div class="fs-bar-col">
+            <span class="fs-bar-pct">13%</span>
+            <div class="fs-bar-track" style="height:82px; background: linear-gradient(to top, #10b981, #34d399); border-radius:12px 12px 0 0; box-shadow: 0 0 25px rgba(16,185,129,0.4);"></div>
+            <span class="fs-bar-lbl">Regelgeving</span>
+          </div>
+        </div>
+        <div class="fs-poll-votes">247 stemmen</div>
+      </div>
+      <div class="fs-slide-label">Poll — Realtime resultaten</div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 7 — Deep dive analyse ═══ -->
+  <div class="slide slide--dark" data-slide="7">
+    <div class="fs-screen">
+      <div class="fs-header">
+        <span class="fs-header-label"></span>
+        <span class="fs-header-live"><span class="fs-live-dot"></span> Live</span>
+      </div>
+      <div class="fs-deepdive">
+        <div class="fs-poll-badge">Deep Dive</div>
+        <div class="fs-dd-title">Analyse op basis van 247 stemmen</div>
+        <div class="fs-dd-grid">
+          <div class="fs-dd-col">
+            <div class="fs-dd-col-label">Per regio</div>
+            <div class="fs-dd-card">
+              <div class="fs-dd-card-top">
+                <span class="fs-dd-card-name">Randstad</span>
+                <span class="fs-dd-card-val">44%</span>
+              </div>
+              <div class="fs-dd-card-bar"><div class="fs-dd-card-fill" style="width:44%; background: linear-gradient(90deg, #f30349, #ff3366);"></div></div>
+              <div class="fs-dd-card-detail">Kosten is dominant thema (52%)</div>
+            </div>
+            <div class="fs-dd-card">
+              <div class="fs-dd-card-top">
+                <span class="fs-dd-card-name">Zuid-Nederland</span>
+                <span class="fs-dd-card-val">28%</span>
+              </div>
+              <div class="fs-dd-card-bar"><div class="fs-dd-card-fill" style="width:28%; background: linear-gradient(90deg, #9333ea, #a855f7);"></div></div>
+              <div class="fs-dd-card-detail">Focus op infrastructuur (41%)</div>
+            </div>
+            <div class="fs-dd-card">
+              <div class="fs-dd-card-top">
+                <span class="fs-dd-card-name">Noord &amp; Oost</span>
+                <span class="fs-dd-card-val">28%</span>
+              </div>
+              <div class="fs-dd-card-bar"><div class="fs-dd-card-fill" style="width:28%; background: linear-gradient(90deg, #f59e0b, #fbbf24);"></div></div>
+              <div class="fs-dd-card-detail">Draagvlak scoort hier het hoogst (38%)</div>
+            </div>
+          </div>
+          <div class="fs-dd-col">
+            <div class="fs-dd-col-label">Per profiel</div>
+            <div class="fs-dd-card">
+              <div class="fs-dd-card-top">
+                <span class="fs-dd-card-name">Bestuurders</span>
+                <span class="fs-dd-card-val">36%</span>
+              </div>
+              <div class="fs-dd-card-bar"><div class="fs-dd-card-fill" style="width:36%; background: linear-gradient(90deg, #f30349, #ff3366);"></div></div>
+              <div class="fs-dd-card-detail">Kosten en regelgeving als top-2</div>
+            </div>
+            <div class="fs-dd-card">
+              <div class="fs-dd-card-top">
+                <span class="fs-dd-card-name">Uitvoerders</span>
+                <span class="fs-dd-card-val">41%</span>
+              </div>
+              <div class="fs-dd-card-bar"><div class="fs-dd-card-fill" style="width:41%; background: linear-gradient(90deg, #9333ea, #a855f7);"></div></div>
+              <div class="fs-dd-card-detail">Infrastructuur en draagvlak dominant</div>
+            </div>
+            <div class="fs-dd-card">
+              <div class="fs-dd-card-top">
+                <span class="fs-dd-card-name">Adviseurs</span>
+                <span class="fs-dd-card-val">23%</span>
+              </div>
+              <div class="fs-dd-card-bar"><div class="fs-dd-card-fill" style="width:23%; background: linear-gradient(90deg, #10b981, #34d399);"></div></div>
+              <div class="fs-dd-card-detail">Meest verdeeld over alle opties</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="fs-slide-label">Deep Dive — Regio &amp; Profiel</div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 8 — Samenvatting poll ═══ -->
+  <div class="slide slide--dark" data-slide="8">
+    <div class="fs-screen">
+      <div class="fs-header">
+        <span class="fs-header-label"></span>
+        <span class="fs-header-live"><span class="fs-live-dot"></span> Live</span>
+      </div>
+      <div class="fs-analyse">
+        <div class="fs-poll-badge" style="margin-bottom: 24px;">Analyse</div>
+        <div class="fs-insight-card">
+          <div class="fs-insight-header">
+            <div class="fs-insight-avatar">N</div>
+            <span class="fs-insight-label">Nova Samenvatting</span>
+          </div>
+          <div class="fs-insight-text">
+            <strong>Kosten</strong> is het dominante thema — vooral in de Randstad (52%) en bij bestuurders. In Noord &amp; Oost zien we juist meer focus op <strong>draagvlak</strong> (38%). Uitvoerders en adviseurs zijn het meest verdeeld: daar speelt <strong>infrastructuur</strong> een grotere rol dan bij andere groepen. Opvallend: <strong>regelgeving</strong> scoort overall het laagst, maar is voor bestuurders wél een top-2 thema.
+          </div>
+        </div>
+      </div>
+      <div class="fs-slide-label">Samenvatting — Poll analyse</div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 9 — Open vraag ═══ -->
+  <div class="slide slide--dark" data-slide="9">
+    <div class="fs-screen">
+      <div class="fs-header">
+        <span class="fs-header-label"></span>
+        <span class="fs-header-live"><span class="fs-live-dot"></span> Live</span>
+      </div>
+      <div class="fs-open">
+        <div class="fs-open-top">
+          <div class="fs-poll-badge">Open Vragen</div>
+          <div class="fs-open-q">Wat zou jij als eerste veranderen<br>in je organisatie?</div>
+        </div>
+        <div class="fs-tiles">
+          <div class="fs-tile-col">
+            <div class="fs-tile">
+              <div class="fs-tile-text">Meer ruimte voor experimenten zonder dat alles meteen een business case nodig heeft</div>
+              <div class="fs-tile-name"><span class="fs-tile-dot" style="background:#f30349"></span> Sarah</div>
+            </div>
+            <div class="fs-tile">
+              <div class="fs-tile-text">Minder vergaderen, meer doen</div>
+              <div class="fs-tile-name"><span class="fs-tile-dot" style="background:#f59e0b"></span> Lisa</div>
+            </div>
+          </div>
+          <div class="fs-tile-col">
+            <div class="fs-tile">
+              <div class="fs-tile-text">Leiderschap dat écht luistert naar de werkvloer</div>
+              <div class="fs-tile-name"><span class="fs-tile-dot" style="background:#10b981"></span> Mark</div>
+            </div>
+            <div class="fs-tile">
+              <div class="fs-tile-text">Hybride werken goed regelen zodat iedereen gelijk meedoet</div>
+              <div class="fs-tile-name"><span class="fs-tile-dot" style="background:#9333ea"></span> Jan</div>
+            </div>
+          </div>
+          <div class="fs-tile-col">
+            <div class="fs-tile">
+              <div class="fs-tile-text">De klant weer centraal, niet de KPI's</div>
+              <div class="fs-tile-name"><span class="fs-tile-dot" style="background:#f30349"></span> Eva</div>
+            </div>
+            <div class="fs-tile">
+              <div class="fs-tile-text">Kortere beslislijnen en minder managementlagen</div>
+              <div class="fs-tile-name"><span class="fs-tile-dot" style="background:#f59e0b"></span> Anne</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="fs-slide-label">Open vraag — Antwoorden live</div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 10 — Gegenereerde afbeelding ═══ -->
+  <div class="slide slide--dark" data-slide="10">
+    <div class="fs-screen">
+      <div class="fs-header">
+        <span class="fs-header-label"></span>
+        <span class="fs-header-live"><span class="fs-live-dot"></span> Live</span>
+      </div>
+      <div class="fs-image">
+        <div class="fs-poll-badge" style="margin-bottom: 24px;">Afbeeldingen</div>
+        <div class="fs-image-frame">
+          <img class="fs-image-canvas" src="generated-image.jpg" alt="Gegenereerde visualisatie op basis van antwoorden">
+        </div>
+        <div class="fs-image-prompt">"Visualiseer de vijf belangrijkste thema's uit 183 antwoorden over organisatieverandering, gewogen op frequentie"</div>
+      </div>
+      <div class="fs-slide-label">Visualisatie — Gegenereerd op basis van antwoorden</div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 11 — Fact-check ═══ -->
+  <div class="slide slide--dark" data-slide="11">
+    <div class="fs-screen">
+      <div class="fs-header">
+        <span class="fs-header-label"></span>
+        <span class="fs-header-live"><span class="fs-live-dot"></span> Live</span>
+      </div>
+      <div class="fs-factcheck">
+        <div class="fs-poll-badge" style="margin-bottom: 24px;">Fact-check</div>
+        <div class="fs-fc-card">
+          <div class="fs-fc-header">
+            <div class="fs-insight-avatar">N</div>
+            <span class="fs-insight-label">Nova Fact-check</span>
+          </div>
+          <div class="fs-fc-claim">"De energietransitie kost Nederland 200 miljard euro"</div>
+          <div class="fs-fc-verdict fs-fc-verdict--false" style="margin-bottom: 24px;">Gedeeltelijk onjuist</div>
+          <div class="fs-fc-explanation">
+            Het PBL schat de kosten op <strong>102 tot 164 miljard euro</strong> tot 2030, afhankelijk van het scenario. Het genoemde bedrag van 200 miljard is niet onderbouwd in recente rapporten. Wel zijn de schattingen <strong>recent opwaarts bijgesteld</strong> door hogere materiaalkosten en netcongestie.
+          </div>
+          <div class="fs-fc-source">Bron: PBL Klimaat- en Energieverkenning 2025 — live opgezocht door NOVA</div>
+        </div>
+      </div>
+      <div class="fs-slide-label">Fact-check — Live verificatie</div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 12 — Quiz: Vraag ═══ -->
+  <div class="slide slide--dark" data-slide="12">
+    <div class="fs-screen">
+      <div class="fs-header">
+        <span class="fs-header-label"></span>
+        <span class="fs-header-live"><span class="fs-live-dot"></span> Live</span>
+      </div>
+      <div class="fs-quiz-wrap">
+        <div class="fs-poll-badge" style="margin-bottom: 60px;">Quiz</div>
+        <div class="fs-quiz-card">
+          <div class="fs-quiz-timer">
+            <svg viewBox="0 0 120 120">
+              <circle class="fs-quiz-timer-bg" cx="60" cy="60" r="54"/>
+              <circle class="fs-quiz-timer-fill" cx="60" cy="60" r="54"/>
+            </svg>
+            <div class="fs-quiz-timer-num">18</div>
+          </div>
+          <div class="fs-quiz-header">
+            <div class="fs-quiz-icon">?</div>
+            <div>
+              <span class="fs-quiz-meta-label">Nova Quiz</span>
+              <span class="fs-quiz-meta-sub">Vraag 3 van 5 <span style="color:rgba(255,255,255,0.7); margin-left:12px;">Ken je eigen organisatie</span></span>
+            </div>
+          </div>
+          <div class="fs-quiz-q">In welk jaar is onze organisatie opgericht?</div>
+        </div>
+      </div>
+      <div class="fs-slide-label">Quiz — Vraag</div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 13 — Quiz: Antwoord ═══ -->
+  <div class="slide slide--dark" data-slide="13">
+    <div class="fs-screen">
+      <div class="fs-header">
+        <span class="fs-header-label"></span>
+        <span class="fs-header-live"><span class="fs-live-dot"></span> Live</span>
+      </div>
+      <div class="fs-quiz-wrap">
+        <div class="fs-poll-badge" style="margin-bottom: 24px;">Quiz</div>
+        <div class="fs-quiz-card" style="padding: 40px 48px;">
+          <div class="fs-quiz-header">
+            <div class="fs-quiz-icon" style="width:40px; height:40px; font-size:20px;">?</div>
+            <div>
+              <span class="fs-quiz-meta-label" style="font-size:11px;">Nova Quiz</span>
+              <span class="fs-quiz-meta-sub" style="font-size:12px;">Vraag 3 van 5 <span style="color:rgba(255,255,255,0.7); margin-left:12px;">Ken je eigen organisatie</span></span>
+            </div>
+          </div>
+          <div class="fs-quiz-q" style="font-size:30px; margin-bottom:28px;">In welk jaar is onze organisatie opgericht?</div>
+          <div class="fs-quiz-answer">
+            <span class="fs-quiz-answer-text" style="font-size:28px;">1997</span>
+          </div>
+          <div class="fs-quiz-bg" style="font-size:18px; margin-top:20px;">Het begon als een klein adviesbureau in Utrecht met drie oprichters. Inmiddels zijn we uitgegroeid tot een organisatie met meer dan 400 medewerkers in zes landen.</div>
+        </div>
+      </div>
+      <div class="fs-slide-label">Quiz — Antwoord</div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 14 — Deelnemersweergave (3 phones) ═══ -->
+  <div class="slide slide--dark" data-slide="14">
+    <div class="fs-screen">
+      <div class="fs-phones">
+        <div class="fs-poll-badge">Meedoen op je telefoon</div>
+        <div class="fs-phones-row">
+
+          <!-- Phone 1: Poll -->
+          <div class="fs-phone-col">
+            <div class="fs-phone">
+              <div class="fs-phone-screen">
+                <div class="fs-phone-header">Live poll</div>
+                <div class="fs-phone-body">
+                  <div class="fs-phone-q">Wat is de grootste uitdaging bij de energietransitie?</div>
+                  <div class="fs-phone-options">
+                    <div class="fs-phone-opt fs-phone-opt--selected">Kosten</div>
+                    <div class="fs-phone-opt">Draagvlak</div>
+                    <div class="fs-phone-opt">Infrastructuur</div>
+                    <div class="fs-phone-opt">Regelgeving</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <span class="fs-phone-label">Poll</span>
+          </div>
+
+          <!-- Phone 2: Open vraag -->
+          <div class="fs-phone-col">
+            <div class="fs-phone">
+              <div class="fs-phone-screen">
+                <div class="fs-phone-header">Open vraag</div>
+                <div class="fs-phone-body">
+                  <div class="fs-phone-q">Wat zou jij als eerste veranderen?</div>
+                  <div class="fs-phone-input-wrap">
+                    <div class="fs-phone-textarea">Meer ruimte voor experimenten zonder dat alles meteen een business case nodig heeft...</div>
+                    <div class="fs-phone-send">Verstuur</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <span class="fs-phone-label">Open vraag</span>
+          </div>
+
+          <!-- Phone 3: Quiz -->
+          <div class="fs-phone-col">
+            <div class="fs-phone">
+              <div class="fs-phone-screen">
+                <div class="fs-phone-header">Quiz — Vraag 3 van 5</div>
+                <div class="fs-phone-body">
+                  <div class="fs-phone-quiz-timer">18</div>
+                  <div class="fs-phone-q">In welk jaar is onze organisatie opgericht?</div>
+                  <div class="fs-phone-quiz-opts">
+                    <div class="fs-phone-quiz-opt">1989</div>
+                    <div class="fs-phone-quiz-opt fs-phone-quiz-opt--selected">1997</div>
+                    <div class="fs-phone-quiz-opt">2003</div>
+                    <div class="fs-phone-quiz-opt">2001</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <span class="fs-phone-label">Quiz</span>
+          </div>
+
+        </div>
+      </div>
+      <div class="fs-slide-label">Deelnemers — Zo beantwoord je op je telefoon</div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 15 — Contact / CTA ═══ -->
+  <div class="slide" data-slide="15">
+    <div class="cta-box">
+      <img class="logo" src="logo-buzzmaster.png" alt="BuzzMaster">
+      <h2 style="margin-bottom:12px;">Klaar om je publiek<br>te <span class="accent">activeren</span>?</h2>
+      <p style="font-size:1.1rem; max-width:480px; margin:0 auto; color: var(--text-secondary);">
+        Plan een demo en ervaar zelf wat BuzzMaster kan betekenen voor jouw event.
+      </p>
+      <a href="mailto:info@buzzmaster.nl" class="cta-btn">Plan een demo</a>
+      <div class="contact-info">
+        info@buzzmaster.nl<br>
+        buzzmaster.nl
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="slide-counter" id="counter">1 / 15</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const counter = document.getElementById('counter');
+  const progress = document.getElementById('progress');
+  const total = slides.length;
+  let current = 0;
+
+  function goTo(idx) {
+    if (idx < 0 || idx >= total) return;
+    slides[current].classList.remove('active');
+    current = idx;
+    slides[current].classList.add('active');
+    counter.textContent = `${current + 1} / ${total}`;
+    progress.style.width = `${((current + 1) / total) * 100}%`;
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); goTo(current + 1); }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); goTo(current - 1); }
+    if (e.key === 'Home')       { e.preventDefault(); goTo(0); }
+    if (e.key === 'End')        { e.preventDefault(); goTo(total - 1); }
+  });
+
+  progress.style.width = `${(1 / total) * 100}%`;
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>
+  // ── NOVA Avatar Animations ──
+  (function() {
+    const ring = document.getElementById('nova-ring');
+    const outer = document.getElementById('nova-outer');
+    const glow = document.getElementById('nova-glow');
+    const scan = document.getElementById('nova-scan');
+    const nLetter = document.getElementById('nova-n');
+    const orbit = document.getElementById('nova-orbit');
+    const status = document.getElementById('nova-status');
+    const speech = document.getElementById('nova-speech');
+
+    // Ring breathing pulse
+    gsap.to(ring, {
+      scale: 1.06, duration: 1.6, repeat: -1, yoyo: true,
+      ease: "sine.inOut"
+    });
+
+    // Outer ring pulse (offset)
+    gsap.to(outer, {
+      scale: 1.1, opacity: 0.3, duration: 2, repeat: -1, yoyo: true,
+      ease: "sine.inOut", delay: 0.4
+    });
+
+    // Glow pulse
+    gsap.to(glow, {
+      scale: 1.15, opacity: 0.6, duration: 2.5, repeat: -1, yoyo: true,
+      ease: "sine.inOut"
+    });
+
+    // Scan beam sweeping vertically
+    gsap.timeline({ repeat: -1, repeatDelay: 2 })
+      .set(scan, { top: '15%', opacity: 0 })
+      .to(scan, { opacity: 0.8, duration: 0.2 })
+      .to(scan, { top: '85%', duration: 1.8, ease: "power1.inOut" })
+      .to(scan, { opacity: 0, duration: 0.2 });
+
+    // N letter subtle float
+    gsap.to(nLetter, {
+      y: -4, duration: 2, repeat: -1, yoyo: true,
+      ease: "sine.inOut"
+    });
+
+    // Orbital particles
+    const colors = ['#f30349', '#ff3366', '#f30349', '#ff6b91', '#f30349'];
+    for (let i = 0; i < 12; i++) {
+      const p = document.createElement('div');
+      const size = 3 + Math.random() * 5;
+      const color = colors[i % colors.length];
+      const radius = 125 + Math.random() * 30;
+      const dur = 4 + Math.random() * 3;
+      const startAngle = (i / 12) * Math.PI * 2;
+
+      Object.assign(p.style, {
+        position: 'absolute',
+        width: size + 'px', height: size + 'px',
+        borderRadius: '50%', background: color,
+        boxShadow: `0 0 ${size * 3}px ${color}`,
+        left: '50%', top: '50%',
+        marginLeft: -(size/2) + 'px', marginTop: -(size/2) + 'px',
+        opacity: '0'
+      });
+      orbit.appendChild(p);
+
+      // Circular orbit via modifiers or manual
+      const tl = gsap.timeline({ repeat: -1, delay: (i / 12) * dur });
+      const steps = 80;
+      for (let s = 0; s <= steps; s++) {
+        const angle = startAngle + (s / steps) * Math.PI * 2;
+        tl.to(p, {
+          x: Math.cos(angle) * radius,
+          y: Math.sin(angle) * radius,
+          duration: dur / steps,
+          ease: "none"
+        });
+      }
+
+      // Pulse opacity
+      gsap.to(p, {
+        opacity: 0.8, duration: 0.8 + Math.random() * 0.6,
+        repeat: -1, yoyo: true,
+        ease: "sine.inOut", delay: Math.random() * 2
+      });
+    }
+
+    // Status text blink
+    gsap.to(status, {
+      opacity: 0.4, duration: 1.2, repeat: -1, yoyo: true,
+      ease: "sine.inOut"
+    });
+
+    // Entrance animation when slide becomes active
+    const slide5 = document.querySelector('[data-slide="5"]');
+    const observer = new MutationObserver(() => {
+      if (slide5.classList.contains('active')) {
+        const tl = gsap.timeline();
+        gsap.set([ring, outer, nLetter, status, speech], { opacity: 0, scale: 0.5 });
+        gsap.set(glow, { scale: 0, opacity: 0 });
+
+        tl.to(glow, { scale: 1.5, opacity: 0.8, duration: 0.5, ease: "power2.out" })
+          .to(ring, { opacity: 1, scale: 1, duration: 0.6, ease: "back.out(2)" }, "-=0.2")
+          .to(outer, { opacity: 0.2, scale: 1, duration: 0.4, ease: "power2.out" }, "-=0.3")
+          .to(nLetter, { opacity: 1, scale: 1, rotationY: 0, duration: 0.7, ease: "back.out(2)" }, "-=0.3")
+          .to(glow, { scale: 3, opacity: 0, duration: 0.5, ease: "power2.out" }, "-=0.3")
+          .set(glow, { scale: 1, opacity: 0.4 })
+          .to(status, { opacity: 1, scale: 1, y: 0, duration: 0.4, ease: "power2.out" }, "-=0.2")
+          .to(speech, { opacity: 1, scale: 1, y: 0, duration: 0.5, ease: "power2.out" }, "-=0.1");
+
+        // Set initial rotationY for N
+        gsap.set(nLetter, { rotationY: -180 });
+      }
+    });
+    observer.observe(slide5, { attributes: true, attributeFilter: ['class'] });
+  })();
+</script>
+
+</body>
+</html>
