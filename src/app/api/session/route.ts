@@ -53,8 +53,8 @@ Gebruik deze context om je antwoorden, vragen en analyses relevant te maken voor
               // Use semantic VAD for smarter turn detection
               turn_detection: {
                 type: "server_vad",
-                threshold: 0.8,
-                silence_duration_ms: 400,
+                threshold: 0.9,
+                silence_duration_ms: 900,
                 //create_response: false,
                 prefix_padding_ms: 800 
               },

@@ -2,7 +2,17 @@
 
 import { useEffect, useState, useRef, useLayoutEffect } from "react";
 import gsap from "gsap";
+import {
+  Chart,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  BarController,
+} from "chart.js";
 import type { PollData } from "@/lib/realtime-client";
+
+// Register only what we need
+Chart.register(CategoryScale, LinearScale, BarElement, BarController);
 
 interface PollDisplayProps {
   poll: PollData | null;
@@ -11,14 +21,106 @@ interface PollDisplayProps {
   onAnalyze?: () => void;
 }
 
-// Buzzmaster color palette
-const BAR_COLORS = [
-  { bg: "linear-gradient(to top, #195969, #1e7d91)", glow: "rgba(25, 89, 105, 0.5)" },
-  { bg: "linear-gradient(to top, #f30349, #ff3366)", glow: "rgba(243, 3, 73, 0.5)" },
-  { bg: "linear-gradient(to top, #9333ea, #a855f7)", glow: "rgba(147, 51, 234, 0.5)" },
-  { bg: "linear-gradient(to top, #f59e0b, #fbbf24)", glow: "rgba(245, 158, 11, 0.5)" },
-  { bg: "linear-gradient(to top, #10b981, #34d399)", glow: "rgba(16, 185, 129, 0.5)" },
+// Buzzmaster color palette — solid colors for Chart.js
+const BAR_COLORS_SOLID = [
+  { bg: "#1e7d91", glow: "rgba(25, 89, 105, 0.5)" },
+  { bg: "#f30349", glow: "rgba(243, 3, 73, 0.5)" },
+  { bg: "#9333ea", glow: "rgba(147, 51, 234, 0.5)" },
+  { bg: "#f59e0b", glow: "rgba(245, 158, 11, 0.5)" },
+  { bg: "#10b981", glow: "rgba(16, 185, 129, 0.5)" },
 ];
+
+// Gradient factory — builds a vertical gradient per bar
+function createGradients(ctx: CanvasRenderingContext2D, chartArea: { bottom: number; top: number }) {
+  return [
+    ["#195969", "#1e7d91"],
+    ["#f30349", "#ff3366"],
+    ["#9333ea", "#a855f7"],
+    ["#f59e0b", "#fbbf24"],
+    ["#10b981", "#34d399"],
+  ].map(([from, to]) => {
+    const g = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+    g.addColorStop(0, from);
+    g.addColorStop(1, to);
+    return g;
+  });
+}
+
+// Plugin: draw percentage labels above bars
+const percentageLabelPlugin = {
+  id: "percentageLabels",
+  afterDatasetsDraw(chart: Chart) {
+    const { ctx } = chart;
+    const meta = chart.getDatasetMeta(0);
+    if (!meta?.data) return;
+
+    ctx.save();
+    ctx.font = "800 2.8rem sans-serif";
+    ctx.fillStyle = "white";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+
+    meta.data.forEach((bar, i) => {
+      const value = chart.data.datasets[0].data[i] as number;
+      if (value == null) return;
+      const x = bar.x;
+      const y = bar.y - 14;
+      ctx.fillText(`${Math.round(value)}%`, x, y);
+    });
+
+    ctx.restore();
+  },
+};
+
+// Plugin: apply gradients + glow shadows to bars
+const gradientPlugin = {
+  id: "gradientBars",
+  beforeDatasetsDraw(chart: Chart) {
+    const { ctx, chartArea } = chart;
+    if (!chartArea) return;
+
+    const gradients = createGradients(ctx, chartArea);
+    const ds = chart.data.datasets[0];
+    const count = ds.data.length;
+
+    ds.backgroundColor = Array.from({ length: count }, (_, i) => gradients[i % gradients.length]);
+
+    // Apply glow via shadow on the bar elements
+    const meta = chart.getDatasetMeta(0);
+    if (meta?.data) {
+      meta.data.forEach((bar, i) => {
+        const el = bar as unknown as { draw: (ctx: CanvasRenderingContext2D) => void };
+        const originalDraw = el.draw.bind(bar);
+        el.draw = function (drawCtx: CanvasRenderingContext2D) {
+          const color = BAR_COLORS_SOLID[i % BAR_COLORS_SOLID.length];
+          drawCtx.save();
+          drawCtx.shadowColor = color.glow;
+          drawCtx.shadowBlur = 25;
+          originalDraw(drawCtx);
+          drawCtx.restore();
+        };
+      });
+    }
+  },
+};
+
+// Split long labels into multiple lines
+function splitLabel(label: string, maxChars = 16): string[] {
+  if (label.length <= maxChars) return [label];
+  const words = label.split(" ");
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    if (current && (current + " " + word).length > maxChars) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = current ? current + " " + word : word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
 
 export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDisplayProps) {
   const [showAnalysis, setShowAnalysis] = useState(false);
@@ -26,7 +128,8 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
   const [animationKey, setAnimationKey] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
-  const barsRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<Chart | null>(null);
   const analysisRef = useRef<HTMLDivElement>(null);
   const voteCountRef = useRef<HTMLSpanElement>(null);
   const hasAnimatedRef = useRef(false);
@@ -38,7 +141,7 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
   // Create a unique ID that includes whether results exist
   const pollId = poll ? `${poll.question}-${(poll.options || []).join("-")}-${hasResults ? "results" : "options"}` : null;
 
-  // Reset when poll changes OR when results appear
+  // Reset when poll changes OR when results first appear
   useEffect(() => {
     if (poll && pollId !== lastPollId.current) {
       lastPollId.current = pollId;
@@ -49,7 +152,94 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
     }
   }, [poll, pollId, hasResults]);
 
-  // Animate container after it's rendered
+  // Destroy chart on unmount or when poll goes away
+  useEffect(() => {
+    return () => {
+      if (chartRef.current) {
+        chartRef.current.destroy();
+        chartRef.current = null;
+      }
+    };
+  }, []);
+
+  // Single function: create or update chart
+  useEffect(() => {
+    if (!hasResults || !poll?.results) {
+      if (chartRef.current) {
+        chartRef.current.destroy();
+        chartRef.current = null;
+      }
+      return;
+    }
+
+    const results = poll.results;
+    const labels = results.map(r => splitLabel(r.option));
+    const data = results.map(r => r.percentage);
+    const maxVal = Math.max(...data, 10);
+
+    if (chartRef.current) {
+      // Live update — shorter animation
+      chartRef.current.data.labels = labels;
+      chartRef.current.data.datasets[0].data = data;
+      (chartRef.current.options.scales!.y as { max: number }).max = Math.min(maxVal + 15, 100);
+      chartRef.current.update("active");
+      return;
+    }
+
+    // First render: create chart — Chart.js animates bars from 0 automatically
+    if (!canvasRef.current) return;
+    const ctx = canvasRef.current.getContext("2d");
+    if (!ctx) return;
+
+    chartRef.current = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: BAR_COLORS_SOLID.slice(0, data.length).map(c => c.bg),
+          borderRadius: { topLeft: 12, topRight: 12, bottomLeft: 0, bottomRight: 0 },
+          borderSkipped: false,
+          barPercentage: 0.65,
+          categoryPercentage: 0.8,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 1200, easing: "easeOutCubic" },
+        transitions: {
+          active: { animation: { duration: 800, easing: "easeOutCubic" } },
+        },
+        layout: { padding: { top: 60, bottom: 0, left: 0, right: 0 } },
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: {
+          x: {
+            grid: { display: false },
+            border: { display: false },
+            ticks: {
+              color: "white",
+              font: { size: 20, weight: "bold" as const },
+              maxRotation: 0,
+              minRotation: 0,
+              padding: 16,
+            },
+          },
+          y: { display: false, beginAtZero: true, max: Math.min(maxVal + 15, 100) },
+        },
+      },
+      plugins: [percentageLabelPlugin, gradientPlugin],
+    });
+  }, [hasResults, poll?.results]);
+
+  // Update vote counter on every results change
+  useEffect(() => {
+    if (hasResults && voteCountRef.current) {
+      voteCountRef.current.textContent = `${totalVotes.toLocaleString("nl-NL")} stemmen`;
+    }
+  }, [hasResults, totalVotes]);
+
+  // Animate container — only on new poll, not on live result updates
   useLayoutEffect(() => {
     if (poll && containerRef.current) {
       gsap.fromTo(
@@ -64,7 +254,7 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
         }
       );
     }
-  }, [poll, animationKey]);
+  }, [animationKey]);
 
   // Animate options with GSAP - only once per animationKey
   useLayoutEffect(() => {
@@ -92,63 +282,6 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
       }
     }
   }, [poll, hasResults, animationKey]);
-
-  // Animate bars with GSAP - only once when results appear
-  useLayoutEffect(() => {
-    if (hasResults && barsRef.current && poll?.results && !hasAnimatedRef.current) {
-      hasAnimatedRef.current = true;
-
-      const bars = barsRef.current.querySelectorAll(".bar-fill");
-      const percents = barsRef.current.querySelectorAll(".bar-percent");
-
-      // Kill any existing animations
-      gsap.killTweensOf(bars);
-      gsap.killTweensOf(percents);
-
-      // Reset bars
-      gsap.set(bars, { height: "0%" });
-
-      // Animate each bar with elastic bounce
-      poll.results.forEach((result, i) => {
-        gsap.to(bars[i], {
-          height: `${result.percentage}%`,
-          duration: 1.4,
-          delay: 0.4 + i * 0.12,
-          ease: "elastic.out(1, 0.4)",
-        });
-
-        // Animate percentage counter
-        const counter = { val: 0 };
-        gsap.to(counter, {
-          val: result.percentage,
-          duration: 1.5,
-          delay: 0.4 + i * 0.12,
-          ease: "power2.out",
-          onUpdate: () => {
-            if (percents[i]) {
-              (percents[i] as HTMLElement).textContent = `${Math.round(counter.val)}%`;
-            }
-          },
-        });
-      });
-
-      // Animate vote counter
-      if (voteCountRef.current) {
-        const voteCounter = { val: 0 };
-        gsap.to(voteCounter, {
-          val: totalVotes,
-          duration: 2,
-          delay: 0.3,
-          ease: "power2.out",
-          onUpdate: () => {
-            if (voteCountRef.current) {
-              voteCountRef.current.textContent = `${Math.round(voteCounter.val).toLocaleString("nl-NL")} stemmen`;
-            }
-          },
-        });
-      }
-    }
-  }, [hasResults, animationKey]);
 
   // Handle analysis
   const handleAnalyze = () => {
@@ -194,6 +327,11 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
           setShowAnalysis(false);
           hasAnimatedRef.current = false;
           lastPollId.current = null;
+          // Destroy chart on close
+          if (chartRef.current) {
+            chartRef.current.destroy();
+            chartRef.current = null;
+          }
           onClose?.();
         },
       });
@@ -282,7 +420,7 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
                 fontWeight: 700,
               }}
             >
-              0 stemmen
+              {totalVotes.toLocaleString("nl-NL")} stemmen
             </span>
           )}
         </div>
@@ -301,94 +439,16 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
           {poll.question}
         </h2>
 
-        {/* VERTICAL BAR CHART */}
+        {/* CHART.JS BAR CHART or OPTIONS */}
         {hasResults ? (
           <div
-            ref={barsRef}
             style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "flex-end",
-              gap: "40px",
-              height: "600px",
-              padding: "0 20px",
+              height: "550px",
+              padding: "0 40px",
+              position: "relative",
             }}
           >
-            {poll.results?.map((result, index) => {
-              const color = BAR_COLORS[index % BAR_COLORS.length];
-
-              return (
-                <div
-                  key={index}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    width: "220px",
-                  }}
-                >
-                  {/* Percentage */}
-                  <span
-                    className="bar-percent"
-                    style={{
-                      color: "white",
-                      fontSize: "3rem",
-                      fontWeight: 800,
-                      fontVariantNumeric: "tabular-nums",
-                      marginBottom: "16px",
-                      height: "50px",
-                    }}
-                  >
-                    0%
-                  </span>
-
-                  {/* Bar container */}
-                  <div
-                    style={{
-                      width: "180px",
-                      height: "470px",
-                      background: "rgba(255, 255, 255, 0.06)",
-                      borderRadius: "16px 16px 0 0",
-                      position: "relative",
-                      display: "flex",
-                      alignItems: "flex-end",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      className="bar-fill"
-                      style={{
-                        width: "100%",
-                        height: "0%",
-                        background: color.bg,
-                        borderRadius: "16px 16px 0 0",
-                        boxShadow: `0 0 25px ${color.glow}`,
-                      }}
-                    />
-                  </div>
-
-                  {/* Label - WHITE and aligned */}
-                  <span
-                    style={{
-                      color: "white",
-                      fontSize: "1.6rem",
-                      fontWeight: 600,
-                      textAlign: "center",
-                      marginTop: "24px",
-                      marginBottom: "16px",
-                      height: "70px",
-                      display: "flex",
-                      alignItems: "flex-start",
-                      justifyContent: "center",
-                      overflowWrap: "break-word",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {result.option}
-                  </span>
-                </div>
-              );
-            })}
+            <canvas ref={canvasRef} />
           </div>
         ) : (
           /* OPTIONS with GSAP staggered animation */
@@ -400,7 +460,7 @@ export function PollDisplay({ poll, onClose, onFillData, onAnalyze }: PollDispla
               gap: "20px",
             }}
           >
-            {poll.options.map((option, index) => (
+            {(poll.options || []).map((option, index) => (
               <div
                 key={index}
                 className="poll-option"
